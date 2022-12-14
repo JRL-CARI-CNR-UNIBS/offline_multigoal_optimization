@@ -141,7 +141,6 @@ int main(int argc, char **argv)
         q=sampler->sample();
 
         tree->rewire(q,rewire_radius,new_node);
-        tree->extend(q,new_node);
         rewire_radius = 1.1 * std::pow(2 * (1.0 + 1.0 / dof) * (sampler->getSpecificVolume()), 1.0 / dof);
       }
       ros::WallTime t1=ros::WallTime::now();

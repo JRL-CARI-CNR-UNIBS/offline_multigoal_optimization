@@ -115,7 +115,7 @@ def main():
     # if a path has a cost higher than (best_cost-(n-2)*min_cost) we can skip it
     count = column[column > best_cost-(min_cost*(len(nodes)-2))].count()
     print('row with too much cost',count,'over', cost_db.shape[0])
-    filter_db=cost_db.loc[cost_db['cost']<best_cost]
+    filter_db=cost_db.loc[cost_db['cost']<(best_cost-(min_cost*(len(nodes)-2)))]
 
 
     # for idx in range(0,10000):
