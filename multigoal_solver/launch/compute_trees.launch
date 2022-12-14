@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+
+<launch>
+<node pkg="multigoal_solver"  type="compute_trees" name="precompute_trees" output="screen">
+  <remap from="/get_ik" to="/ur_ik/get_ik"/>
+  <rosparam command="load" file="$(find multigoal_solver)/config/test.yaml" />
+</node>
+</launch>

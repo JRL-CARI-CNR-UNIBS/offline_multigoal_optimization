@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+
+<launch>
+<node pkg="multigoal_solver"  type="compute_paths" name="compute_paths" output="screen">
+  <rosparam command="load" file="$(find multigoal_solver)/config/test.yaml" />
+  <param name="tree_namespace" value="/precompute_trees"/>
+</node>
+</launch>
