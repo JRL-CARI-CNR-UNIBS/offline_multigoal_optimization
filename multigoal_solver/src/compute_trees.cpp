@@ -86,12 +86,7 @@ int main(int argc, char **argv)
     ROS_ERROR("%s/stall_iterations is not defined",pnh.getNamespace().c_str());
     return 0;
   }
-  int max_number_of_solutions;
-  if (!pnh.getParam("max_number_of_solutions",max_number_of_solutions))
-  {
-    ROS_ERROR("%s/max_number_of_solutions is not defined",pnh.getNamespace().c_str());
-    return 0;
-  }
+
 
   for (std::string& tf_name: tf_list)
   {
@@ -141,7 +136,7 @@ int main(int argc, char **argv)
         q=sampler->sample();
 
         tree->rewire(q,rewire_radius,new_node);
-        tree->extend(q,new_node);
+//        tree->extend(q,new_node);
         rewire_radius = 1.1 * std::pow(2 * (1.0 + 1.0 / dof) * (sampler->getSpecificVolume()), 1.0 / dof);
       }
       ros::WallTime t1=ros::WallTime::now();
