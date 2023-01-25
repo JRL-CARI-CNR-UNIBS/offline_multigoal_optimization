@@ -4,6 +4,7 @@ import random
 import pandas as pd
 import ant_colony_system as acs
 import matplotlib.pyplot as plt
+import time
 
 pingInfoFilePath = "./costmap.ftr"
 cost_db = pd.read_feather(pingInfoFilePath, columns=None, use_threads=True)
@@ -33,14 +34,19 @@ cost_db.insert(cost_db.shape[1], "pweight", [1.0] * cost_db.shape[0])
 acs.update_pweights(cost_db, beta=solver_param["beta"])
 
 TESTS = 10
-obtained_at = best_ant = [0 for x in range(TESTS)]
+temp = obtained_at = best_ant = [0 for x in range(TESTS)]
 
 for idx in range(TESTS):
     print(f"Iteration: {idx}")
+    tic = time.perf_counter()
     best_ant[idx], obtained_at[idx], _ = acs.ant_colony_optimization(10, 100, cost_db, nodes, ik_number, solver_param)
+    toc = time.perf_counter()
+    temp[idx] = toc - tic
     cost_db["ph"] = solver_param["ph0"]
     cost_db["pweight"] = 1.0
     acs.update_pweights(cost_db, beta=solver_param["beta"])
+
+print(f"Tempi: {temp}")
 
 best_cost = [x["cost"] for x in best_ant]
 

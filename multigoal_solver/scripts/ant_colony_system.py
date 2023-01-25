@@ -1,3 +1,5 @@
+#! /usr/bin/env python3
+
 # =============================================================================
 # Ant Colony System for Generalized Traveling Salesman Problem
 # =============================================================================
@@ -7,17 +9,18 @@ import random
 # import feather
 
 
-def ant_colony_optimization(n_ants, n_iter, cost_db, nodes, ik_number, param):
+def ant_colony_optimization(cost_db, nodes, ik_number, optimization_parameters):
+    param = optimization_parameters.copy()
     best_ant = {
         "node": "",
         "ik": 0,
         "trail": [],
         "cost": float("inf"),
-        "missing": []
+        "missing": [],
     }
     no_improv = 0
-    obtained_at = 1
-    for it in range(n_iter):
+    obtained_at = 0
+    for it in range(param["number_of_iterations"]):
         # Ants setup
         ants = [{"node": random.choice(nodes),
                  "ik": 0,
@@ -25,31 +28,29 @@ def ant_colony_optimization(n_ants, n_iter, cost_db, nodes, ik_number, param):
                  "cost": 0,
                  "missing": nodes.copy()
                  }
-                for idx in range(n_ants)]
+                for idx in range(param["number_of_ants"])]
         
         for ant in ants:
             ant["ik"] = random.randint(0, ik_number[ant["node"]] - 1)
             ant["trail"].append({"node": ant["node"], "ik": ant["ik"]})
             ant["missing"].remove(ant["node"])
-            
-        # DEBUG
-        ant_start_pos = [(x["node"], x["ik"]) for x in ants]
 
         # Simulation
         for tick in range(len(nodes) - 1):
             goto_next_node(cost_db, ants, beta=param["beta"], q0=param["q0"])
-            local_update_ph(cost_db, ants, rho=param["rho"], dph=param["dph"])
+            local_update_ph(cost_db, ants, rho=param["rho"], ph_variation=param["ph_variation"])
 
         update_pweights(cost_db, beta=param["beta"])
-        candidate_best_ant = get_best_ant(cost_db, ants).copy()
+        candidate_best_ant = get_best_ant(cost_db, ants)
         if best_ant["cost"] > candidate_best_ant["cost"]:
-            best_ant = candidate_best_ant
-            obtained_at = it
+            best_ant = candidate_best_ant.copy()
+            obtained_at = it + 1
+            no_improv = 0
         else:
             no_improv += 1
 
-        global_update_ph(cost_db, best_ant, rho=param["rho"])
-        check_ph_bounds(cost_db,ph_bounds=param["ph_bounds"])
+        global_update_ph(cost_db, best_ant, rho=param["rho"])            
+        check_ph_bounds(cost_db, ph_bounds=param["ph_bounds"])
         
         # Various print
         print("====================")
@@ -57,8 +58,8 @@ def ant_colony_optimization(n_ants, n_iter, cost_db, nodes, ik_number, param):
         print_ant(best_ant)
         print("Other costs: ")
         cc = 0
-        for start_pos, ant in zip(ant_start_pos, ants):
-            print("[{:8s}, ik {:3d}: {:10.4f}] ".format(start_pos[0], start_pos[1], ant["cost"]), end="")
+        for ant in ants:
+            print("[{:8s}, ik {:3d}: {:10.4f}] ".format(ant["trail"][0]["node"], ant["trail"][0]["ik"], ant["cost"]), end="")
             if cc % 2 == 1:
                 print(" ")
             cc += 1
@@ -69,12 +70,12 @@ def ant_colony_optimization(n_ants, n_iter, cost_db, nodes, ik_number, param):
         # if it >= 20:
         #     pass
 
-        if no_improv > param["max_no_improv"]:
-            exit_reason = "No improvement after {} iterations".format(param["max_no_improv"])
-            break
+        # if no_improv > param["max_no_improv"]:
+        #     exit_reason = "No improvement after {} iterations".format(param["max_no_improv"])
+        #     break
 
-    if it >= n_iter-1:
-        exit_reason = "Max number of iteration reached: {}".format(n_iter)
+    if it >= param["number_of_iterations"]-1:
+        exit_reason = "Max number of iteration reached ({})".format(param["number_of_iterations"])
     return (best_ant, obtained_at, exit_reason)
 
 
@@ -111,7 +112,7 @@ def check_ph_bounds(cost_db, ph_bounds):
     cost_db.loc[cost_db["ph"] < ph_bounds[0], "ph"] = ph_bounds[0]
     cost_db.loc[cost_db["ph"] > ph_bounds[1], "ph"] = ph_bounds[1]
 
-def local_update_ph(cost_db, ants, rho, dph):
+def local_update_ph(cost_db, ants, rho, ph_variation):
     for ant in ants:
         cost_db.loc[(cost_db["root"] == ant["trail"][-2]["node"])
                     & (cost_db["root_ik_number"] == ant["trail"][-2]["ik"])
@@ -123,12 +124,13 @@ def local_update_ph(cost_db, ants, rho, dph):
                                   & (cost_db["goal"] == ant["trail"][-1]["node"])
                                   & (cost_db["goal_ik_number"] == ant["trail"][-1]["ik"]),
                                   "ph"]
-                                  ) * (1 - rho) + rho * dph
+                                  ) * (1 - rho) + rho * ph_variation
 
 def global_update_ph(cost_db, best_ant, rho):
     cost_db["ph"] *= (1 - rho)
     trail_idx = get_trail_idx(cost_db, best_ant["trail"])
     cost_db.loc[trail_idx, "ph"] += rho / get_trail_cost(cost_db, best_ant)
+
 
 def possible_next_node_idx(cost_db, ant):
      return list(cost_db.loc[(cost_db["root"] == ant["node"])
@@ -138,6 +140,8 @@ def possible_next_node_idx(cost_db, ant):
     
 
 def next_node_probsum(cost_db, select_idx, ant, beta):
+    # probability = (cost * visibility ^ beta) / sum_probablities
+    # visibility = 1/pheromone
     return list(cost_db.loc[select_idx, "pweight"]
                 .mul(
                     cost_db.loc[select_idx, "cost"]
@@ -236,29 +240,30 @@ def main():
     for n in nodes:
         ik_number[n] = int(1 + cost_db.loc[cost_db["root"] == n]["root_ik_number"].max())
 
-    solver_param = {"beta": 2,
-                    "rho": 0.1,
-                    "ph0": 1/(12*len(nodes)),
-                    "q0": 0.9,
-                    "dph": 1/(12*len(nodes)),
-                    "ph_bounds": tuple([ x/(12*len(nodes)) for x in [0.1, 1.05]]),
-                    "max_no_improv": float("inf"),
+    # Solver parameters
+    solver_param = {"number_of_ants": 10,
+                    "number_of_iterations": 100,
+                    "beta": 5,
+                    "rho": 0.5,
+                    "q0": 0.5,
+                    "ph_init": 1/(12*len(nodes)),
+                    "ph_variation": 1/(12*len(nodes)),
+                    "ph_bounds": tuple([x/(12*len(nodes)) for x in [0.1, 1.05]]),
+                    "max_no_improv": 10, #float("inf"),
                     }
 
     # Add Pheromone column
-    cost_db.insert(cost_db.shape[1], "ph", solver_param["ph0"] * cost_db.shape[0])
+    cost_db.insert(cost_db.shape[1], "ph", solver_param["ph_init"] * cost_db.shape[0])
 
     # Add Heuristic column
     cost_db.insert(cost_db.shape[1], "pweight", [1.0] * cost_db.shape[0])
     update_pweights(cost_db, beta=solver_param["beta"])
 
-    best_ant, obtained_at, exit_reason = ant_colony_optimization(10, 100, cost_db, nodes, ik_number, solver_param)
+    best_ant, obtained_at, exit_reason = ant_colony_optimization(cost_db, nodes, ik_number, solver_param)
 
     print("Exit reason: {}".format(exit_reason))
     print_ant(best_ant)
-    
-    # return (best_ant, obtained_at)
-
+        
 
 if __name__ == "__main__":
     main()
