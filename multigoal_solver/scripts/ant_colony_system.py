@@ -4,10 +4,11 @@
 # Ant Colony System Optimization for Generalized Traveling Salesman Problem
 # =============================================================================
 
-import pandas as pd
+import time
 import random
 from typing import List, Dict
-import time
+
+import pandas as pd
 
 
 class Ant():
@@ -15,76 +16,92 @@ class Ant():
                  cost_db: pd.DataFrame,
                  node: str,
                  ik: int,
-                 missing: List[str] = [],
-                 trail: List[Dict] = [],
+                 missing: List[str] = None,
+                 trail: List[Dict] = None,
                  cost: float = 0,
                  ) -> None:
         self.cost_db = cost_db
         self.node = node
         self.ik = ik
-        self.trail = trail.copy()
+
+        if trail is None:
+            self.trail = []
+        else:
+            self.trail = trail.copy()
+
         self.cost = cost
-        self.missing = missing.copy()
+
+        if missing is None:
+            self.missing = []
+        else:
+            self.missing = missing.copy()
 
     def move(self, node: str, ik: str) -> None:
-        self.setNode(node)
-        self.setIk(ik)
-        self.addNodeToTrail()
-        self.updateCost()
-        self.updateMissing()
+        self.set_node(node)
+        self.set_ik(ik)
+        self.add_node_to_trail()
+        self.update_cost()
+        self.update_missing()
 
-    def setNode(self, node: str) -> None:
+    def set_node(self, node: str) -> None:
         self.node = node
 
-    def setIk(self, ik: int) -> None:
+    def set_ik(self, ik: int) -> None:
         self.ik = ik
 
-    def addNodeToTrail(self) -> None:
+    def add_node_to_trail(self) -> None:
         self.trail.append({"node": self.node, "ik": self.ik})
 
-    def updateCost(self) -> None:
+    def update_cost(self) -> None:
         if len(self.trail) > 1:
             self.cost += float(
-                self.cost_db.loc[(self.cost_db["root"] == self.trail[-2]["node"])
-                                 & (self.cost_db["root_ik_number"] == self.trail[-2]["ik"])
-                                 & (self.cost_db["goal"] == self.trail[-1]["node"])
-                                 & (self.cost_db["goal_ik_number"] == self.trail[-1]["ik"]),
-                                 "cost"])
+                self.cost_db.loc[
+                    (self.cost_db["root"] == self.trail[-2]["node"])
+                    & (self.cost_db["root_ik_number"] == self.trail[-2]["ik"])
+                    & (self.cost_db["goal"] == self.trail[-1]["node"])
+                    & (self.cost_db["goal_ik_number"] == self.trail[-1]["ik"]),
+                    "cost"
+                ]
+            )
 
-    def updateMissing(self) -> None:
+    def update_missing(self) -> None:
         self.missing.remove(self.node)
 
-    def getTrailCost(self):
+    def get_trail_cost(self):
         total_cost = 0
         vm1 = self.trail[0]
         for v in self.trail[1:]:
-            total_cost = float(self.cost_db.loc[
-                               (self.cost_db["root"] == vm1["node"])
-                               & (self.cost_db["root_ik_number"] == vm1["ik"])
-                               & (self.cost_db["goal"] == v["node"])
-                               & (self.cost_db["goal_ik_number"] == v["ik"]),
-                               "cost"]
-                               ) + total_cost
+            total_cost = float(
+                self.cost_db.loc[
+                    (self.cost_db["root"] == vm1["node"])
+                    & (self.cost_db["root_ik_number"] == vm1["ik"])
+                    & (self.cost_db["goal"] == v["node"])
+                    & (self.cost_db["goal_ik_number"] == v["ik"]),
+                    "cost"
+                ]
+            ) + total_cost
             vm1 = v
         return total_cost
 
-    def getTrailIndex(self):
+    def get_trail_index(self):
         trail_idx = []
         vm1 = self.trail[0]
         for v in self.trail[1:]:
-            trail_idx.append(list(self.cost_db.loc[(self.cost_db["root"] == vm1["node"])
-                                                   & (self.cost_db["root_ik_number"] == vm1["ik"])
-                                                   & (self.cost_db["goal"] == v["node"])
-                                                   & (self.cost_db["goal_ik_number"] == v["ik"])
-                                                   ].index
-                                  )[0]
-                             )
+            trail_idx.append(
+                list(
+                    self.cost_db.loc[(self.cost_db["root"] == vm1["node"])
+                                     & (self.cost_db["root_ik_number"] == vm1["ik"])
+                                     & (self.cost_db["goal"] == v["node"])
+                                     & (self.cost_db["goal_ik_number"] == v["ik"])
+                                     ].index)[0]
+            )
             vm1 = v
         return trail_idx
 
-    def printAnt(self):
+    def print_ant(self):
         print("[Ant] Cost: {}".format(self.cost))
-        print("({:8s},{:2d})".format(self.trail[0]["node"], self.trail[0]["ik"]), end="")
+        print("({:8s},{:2d})".format(self.trail[0]["node"],
+                                     self.trail[0]["ik"]), end="")
         cc = 0
         for t in self.trail[1:]:
             print(" --> ({:8s},{:2d})".format(t["node"], t["ik"]), end="")
@@ -117,6 +134,7 @@ class AntColonySystem():
         self.ph_variation = ph_variation
         self.ph_bounds = ph_bounds
         self.max_no_improv = max_no_improv
+        self.ants = []
 
         self.nodes = list(cost_db.root.unique())
         self.ik_number = {}
@@ -128,7 +146,7 @@ class AntColonySystem():
 
         # Add Heuristic column
         self.cost_db.insert(cost_db.shape[1], "pweight", [1.0] * self.cost_db.shape[0])
-        self.updatePWeights()
+        self.update_pweights()
 
         self.best_ant = Ant(self.cost_db, node="", ik=0, cost=float("inf"))
 
@@ -136,67 +154,49 @@ class AntColonySystem():
         no_improv = 0
         obtained_at = 0
         for it in range(self.number_of_iterations):
-            # self.ants = [Ant(self.cost_db,
-            #                  node=random.choice(self.nodes),
-            #                  ik=0,
-            #                  missing=self.nodes.copy()
-            #                  ) for idx in range(self.number_of_ants)
-            #              ]
-
-            # for ant in self.ants:
-            #     ant.setIk(random.randint(0, self.ik_number[ant.node] - 1))
-            #     ant.addNodeToTrail()
-            #     ant.updateMissing()
-            self.ants = [self.createRandomAnt(self.nodes, self.ik_number) for idx in range(self.number_of_ants)]
+            self.ants = [self.create_random_ant() for idx in range(self.number_of_ants)]
 
             # Simulation
-            for tick in range(len(self.nodes) - 1):
-                self.gotoNextNode()
-                self.localUpdatePh()
+            for _ in range(len(self.nodes) - 1):
+                self.goto_next_node()
+                self.local_update_ph()
 
-            self.updatePWeights()
-            candidate_best_ant = self.getBestAnt()
+            self.update_pweights()
+            candidate_best_ant = self.get_best_ant()
             if self.best_ant.cost > candidate_best_ant.cost:
-                self.best_ant = candidate_best_ant  # Copy ??
+                self.best_ant = candidate_best_ant
                 obtained_at = it + 1
                 no_improv = 0
             else:
                 no_improv += 1
 
-            self.globalUpdatePh(self.best_ant)
-            self.checkPhBounds()
+            self.global_update_ph(self.best_ant)
+            self.check_ph_bounds()
 
             # Print for debug purposes
-            # self.printIteration(it, obtained_at, self.ants)
+            # self.print_iteration(it, obtained_at, self.ants)
             print("[{}] Best cost = {}".format(it, self.best_ant.cost))
-
-            # # DEBUG
-            # if it >= 20:
-            #     pass
-
-            # if no_improv > param["max_no_improv"]:
-            #     exit_reason = "No improvement after {} iterations".format(param["max_no_improv"])
-            #     break
 
         if it >= self.number_of_iterations - 1:
             exit_reason = "Max number of iteration reached ({})".format(self.number_of_iterations)
         return (self.best_ant, obtained_at, exit_reason)
 
-    def createRandomAnt(self, nodes: str, ik_number: Dict) -> Ant:
-        ant = Ant(self.cost_db,
-                  node=random.choice(self.nodes),
-                  ik=0,
-                  missing=self.nodes.copy()
-                  )
-        ant.setIk(random.randint(0, self.ik_number[ant.node] - 1))
-        ant.addNodeToTrail()
-        ant.updateMissing()
+    def create_random_ant(self) -> Ant:
+        ant = Ant(
+            self.cost_db,
+            node=random.choice(self.nodes),
+            ik=0,
+            missing=self.nodes.copy()
+        )
+        ant.set_ik(random.randint(0, self.ik_number[ant.node] - 1))
+        ant.add_node_to_trail()
+        ant.update_missing()
         return ant
 
-    def updatePWeights(self) -> None:
+    def update_pweights(self) -> None:
         self.cost_db["pweight"] = self.cost_db["cost"].rdiv(1).pow(self.beta).mul(self.cost_db["ph"])
 
-    def getBestAnt(self) -> Ant:
+    def get_best_ant(self) -> Ant:
         best_cost = float("inf")
         best_ant = self.ants[0]
         for a in self.ants:
@@ -206,76 +206,83 @@ class AntColonySystem():
 
         return best_ant
 
-    def getNeighbourPWeightSum(self, ant: Ant, cost_db: pd.DataFrame = None) -> float:
+    def get_neighbour_pweight_sum(self, ant: Ant, cost_db: pd.DataFrame = None) -> float:
         if cost_db is None:
             cost_db = self.cost_db
 
-        cost_inverse_db = cost_db.loc[(cost_db["root"] == ant.node)
-                                      & (cost_db["root_ik_number"] == ant.ik)
-                                      & (cost_db["goal"].isin(ant.missing)),
-                                      "cost"].rdiv(1).pow(self.beta)
+        cost_inverse_db = cost_db.loc[
+            (cost_db["root"] == ant.node)
+            & (cost_db["root_ik_number"] == ant.ik)
+            & (cost_db["goal"].isin(ant.missing)),
+            "cost"
+        ].rdiv(1).pow(self.beta)
 
-        return float(cost_db.loc[(cost_db["root"] == ant.node)
-                                 & (cost_db["root_ik_number"] == ant.ik)
-                                 & (cost_db["goal"].isin(ant.missing)),
-                                 "ph"]
-                     .mul(cost_inverse_db)
-                     .sum()
-                     )
+        return float(
+            cost_db.loc[(cost_db["root"] == ant.node)
+                        & (cost_db["root_ik_number"] == ant.ik)
+                        & (cost_db["goal"].isin(ant.missing)),
+                        "ph"]
+            .mul(cost_inverse_db)
+            .sum()
+        )
 
-    def checkPhBounds(self) -> None:
+    def check_ph_bounds(self) -> None:
         self.cost_db.loc[self.cost_db["ph"] < self.ph_bounds[0], "ph"] = self.ph_bounds[0]
         self.cost_db.loc[self.cost_db["ph"] > self.ph_bounds[1], "ph"] = self.ph_bounds[1]
 
-    def localUpdatePh(self) -> None:
+    def local_update_ph(self) -> None:
         for ant in self.ants:
-            self.cost_db.loc[(self.cost_db["root"] == ant.trail[-2]["node"])
-                             & (self.cost_db["root_ik_number"] == ant.trail[-2]["ik"])
-                             & (self.cost_db["goal"] == ant.trail[-1]["node"])
-                             & (self.cost_db["goal_ik_number"] == ant.trail[-1]["ik"]),
-                             "ph"] = float(
-                                      self.cost_db.loc[(self.cost_db["root"] == ant.trail[-2]["node"])
-                                                       & (self.cost_db["root_ik_number"] == ant.trail[-2]["ik"])
-                                                       & (self.cost_db["goal"] == ant.trail[-1]["node"])
-                                                       & (self.cost_db["goal_ik_number"] == ant.trail[-1]["ik"]),
-                                                       "ph"]
-                                           ) * (1 - self.rho) + self.rho * self.ph_variation
+            self.cost_db.loc[
+                (self.cost_db["root"] == ant.trail[-2]["node"])
+                & (self.cost_db["root_ik_number"] == ant.trail[-2]["ik"])
+                & (self.cost_db["goal"] == ant.trail[-1]["node"])
+                & (self.cost_db["goal_ik_number"] == ant.trail[-1]["ik"]),
+                "ph"
+            ] = float(
+                self.cost_db.loc[
+                    (self.cost_db["root"] == ant.trail[-2]["node"])
+                    & (self.cost_db["root_ik_number"] == ant.trail[-2]["ik"])
+                    & (self.cost_db["goal"] == ant.trail[-1]["node"])
+                    & (self.cost_db["goal_ik_number"] == ant.trail[-1]["ik"]),
+                    "ph"]
+            ) * (1 - self.rho) + self.rho * self.ph_variation
 
-    def globalUpdatePh(self, best_ant: Ant = None) -> None:
+    def global_update_ph(self, best_ant: Ant = None) -> None:
         if best_ant is None:
-            best_ant = self.getBestAnt()
+            best_ant = self.get_best_ant()
         self.cost_db["ph"] *= (1 - self.rho)
-        trail_idx = best_ant.getTrailIndex()
-        self.cost_db.loc[trail_idx, "ph"] += self.rho / best_ant.getTrailCost()
+        trail_idx = best_ant.get_trail_index()
+        self.cost_db.loc[trail_idx, "ph"] += self.rho / best_ant.get_trail_cost()
 
-    def getPossibleNextNodeIndex(self, ant: Ant) -> List[int]:
+    def get_possible_next_node_index(self, ant: Ant) -> List[int]:
         return list(self.cost_db.loc[(self.cost_db["root"] == ant.node)
                                      & (self.cost_db["root_ik_number"] == ant.ik)
                                      & (self.cost_db["goal"].isin(ant.missing))
                                      ].index)
 
-    def getNextNodeProbCumsum(self, select_idx: List[int], ant: Ant):
+    def get_next_node_prob_cumsum(self, select_idx: List[int], ant: Ant) -> List[float]:
         # probability = (cost * visibility ^ beta) / sum_probablities
         # visibility = 1/pheromone
-        return list(self.cost_db.loc[select_idx, "pweight"]
-                    .mul(
-                         self.cost_db.loc[select_idx, "cost"]
-                         .rdiv(1)
-                         .pow(self.beta)
-                         )
-                    .div(
-                         self.getNeighbourPWeightSum(
-                                                     ant,
-                                                     self.cost_db.loc[select_idx]
-                                                     )
-                         )
-                    .cumsum()
-                    )
+        return list(
+            self.cost_db.loc[select_idx, "pweight"]
+            .mul(
+                self.cost_db.loc[select_idx, "cost"]
+                .rdiv(1)
+                .pow(self.beta)
+            )
+            .div(
+                self.get_neighbour_pweight_sum(
+                    ant,
+                    self.cost_db.loc[select_idx]
+                )
+            )
+            .cumsum()
+        )
 
-    def gotoNextNode(self):
+    def goto_next_node(self) -> None:
         for ant in self.ants:
-            select_idx = self.getPossibleNextNodeIndex(ant)
-            cumsum_list = self.getNextNodeProbCumsum(select_idx, ant)
+            select_idx = self.get_possible_next_node_index(ant)
+            cumsum_list = self.get_next_node_prob_cumsum(select_idx, ant)
             if random.random() > self.q0:
                 idx = random.choices(select_idx, cum_weights=cumsum_list, k=1)[0]
             else:
@@ -283,33 +290,72 @@ class AntColonySystem():
 
             ant.move(str(self.cost_db.at[idx, "goal"]),
                      int(self.cost_db.at[idx, "goal_ik_number"]))
-            # ant.setNode(str(self.cost_db.at[idx, "goal"]))
-            # ant.setIk(int(self.cost_db.at[idx, "goal_ik_number"]))
-            # ant.addNodeToTrail()
-            # ant.updateCost()
-            # ant.updateMissing()
 
-    def printIteration(self,
-                       it: int,
-                       obtained_at: int,
-                       ants: List[Ant]) -> None:
+    def print_iteration(self,
+                        it: int,
+                        obtained_at: int) -> None:
         # Various print
         print("====================")
         print("iteration: {:4d}, Best ant obtained at {:3d}".format(it + 1, obtained_at))
-        self.best_ant.printAnt()
+        self.best_ant.print_ant()
         print("Other costs: ")
         cc = 0
         for ant in self.ants:
-            print("[{:8s}, ik {:3d}: {:10.4f}] ".format(ant.trail[0]["node"], ant.trail[0]["ik"], ant.cost), end="")
+            print("[{:8s}, ik {:3d}: {:10.4f}] ".format(ant.trail[0]["node"],
+                                                        ant.trail[0]["ik"],
+                                                        ant.cost),
+                  end="")
             if cc % 2 == 1:
                 print(" ")
             cc += 1
         print(" ")
 
+    def nearest_neighbour(self) -> Ant:
+        best_ant_ = self.best_ant
+        start = self.best_ant.trail[0]["node"]
+        random_ik = list(range(0, self.ik_number[start]))
+        random.shuffle(random_ik)
+        for start_ik in random_ik:
+            remaining_nodes = self.nodes.copy()
+            remaining_nodes.remove(start)
 
-def testACS(number_of_runs: int = 1) -> None:
-    pingInfoFilePath = "./costmap.ftr"
-    cost_db = pd.read_feather(pingInfoFilePath, columns=None, use_threads=True)
+            sequence = [{'node': start, 'ik': start_ik}]
+            total_cost = 0
+
+            remain_db = self.cost_db.loc[(self.cost_db['goal'] != start)]
+
+            while len(remaining_nodes) > 0:
+                db = remain_db.loc[(self.cost_db['root'] == start)
+                                   & (remain_db['root_ik_number'] == start_ik)]
+
+                row = db.loc[db['cost'] == db['cost'].min()]
+                next_goal = row.iloc[0]['goal']
+                next_ik = row.iloc[0]['goal_ik_number']
+                cost = row.iloc[0]['cost']
+                remaining_nodes.remove(next_goal)
+
+                total_cost += cost
+                if (total_cost > best_ant_.cost):
+                    break
+                sequence.append({'node': next_goal, 'ik': next_ik})
+
+                start = next_goal
+                start_ik = next_ik
+                remain_db = remain_db.loc[(remain_db['goal'] != start)]
+
+            if (total_cost < best_ant_.cost):
+                best_ant_ = Ant(
+                    self.cost_db,
+                    node=sequence[-1]["node"],
+                    ik=sequence[-1]["ik"],
+                    missing=[],
+                    trail=sequence.copy(),
+                    cost=total_cost)
+        return best_ant_
+
+
+def test_ACS(feather_db_path: str, number_of_runs: int = 1) -> None:
+    cost_db = pd.read_feather(feather_db_path, columns=None, use_threads=True)
     nodes = list(cost_db.root.unique())
     acs = AntColonySystem(cost_db,
                           number_of_ants=10,
@@ -320,11 +366,11 @@ def testACS(number_of_runs: int = 1) -> None:
                           ph_init=1 / (12 * len(nodes)),
                           ph_variation=1 / (12 * len(nodes)),
                           ph_bounds=tuple([x / (12 * len(nodes)) for x in [0.1, 1.05]]),
-                          max_no_improv=float("inf"),
+                          max_no_improv=10,
                           )
     best_list = []
     tic = time.perf_counter()
-    for idx in range(number_of_runs):
+    for _ in range(number_of_runs):
         ltic = time.perf_counter()
         best_ant, _, _ = acs.run()
         ltoc = time.perf_counter()
@@ -334,9 +380,10 @@ def testACS(number_of_runs: int = 1) -> None:
     toc = time.perf_counter()
 
     for ba in best_list:
-        ba.printAnt()
+        ba.print_ant()
     print("Total Timing: {}".format(toc - tic))
 
 
 if __name__ == "__main__":
-    testACS(1)
+    db_path = "./costmap2.ftr"
+    test_ACS(feather_db_path=db_path, number_of_runs=1)
