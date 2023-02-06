@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 import pandas as pd
 import random
+import rospy
 import feather
 #sudo apt install python3-feather-format
 #pip3 instal pyarrow
 
 def genClosestFirstTravel(nodes,ik_number,cost_db):
     best_cost=float('inf')
+    best_sequence=[]
     random_nodes=nodes.copy()
     random.shuffle(random_nodes)
     for start in random_nodes:
@@ -16,7 +18,7 @@ def genClosestFirstTravel(nodes,ik_number,cost_db):
             remaining_nodes=nodes.copy()
             remaining_nodes.remove(start)
 
-            sequence=[{'node': start,'ik': start_ik}]
+            sequence=[{'node': start,'ik': float(start_ik)}]
             total_cost=0
 
             remain_db=cost_db.loc[(cost_db['goal'] != start)]
@@ -24,6 +26,10 @@ def genClosestFirstTravel(nodes,ik_number,cost_db):
             while len(remaining_nodes)>0:
                 db=remain_db.loc[(cost_db['root'] == start) &\
                 (remain_db['root_ik_number'] == start_ik)]
+
+                if (db.shape[0]==0):
+                    total_cost=float('inf')
+                    break
 
                 row=db.loc[db['cost']==db['cost'].min()]
                 next = row.iloc[0]['goal']
@@ -34,7 +40,7 @@ def genClosestFirstTravel(nodes,ik_number,cost_db):
                 total_cost+=cost
                 if (total_cost>best_cost):  # abort this solution because is worst than the best one
                     break
-                sequence.append({'node': next,'ik': next_ik})
+                sequence.append({'node': next,'ik': float(next_ik)})
 
                 start=next
                 start_ik=next_ik
@@ -55,7 +61,7 @@ def genTravel(nodes,ik_number,cost_db,best_cost):
 
     start_ik = random.randrange(ik_number[start])
 
-    sequence=[{'node': start,'ik': start_ik}]
+    sequence=[{'node': start,'ik': float(start_ik)}]
     total_cost=0
     remain_db=cost_db.loc[(cost_db['goal'] != start)]
     while len(remaining_nodes)>0:
@@ -80,7 +86,7 @@ def genTravel(nodes,ik_number,cost_db,best_cost):
         total_cost+=cost
         if (total_cost>best_cost):  # abort this solution because is worst than the best one
             return float('inf'),sequence
-        sequence.append({'node': next,'ik': next_ik})
+        sequence.append({'node': next,'ik': float(next_ik)})
         start=next
         start_ik=next_ik
         remain_db=remain_db.loc[(remain_db['goal'] != start)]
@@ -88,6 +94,8 @@ def genTravel(nodes,ik_number,cost_db,best_cost):
     return total_cost, sequence
 
 def main():
+    rospy.init_node('min_travel')
+
     pingInfoFilePath = "./costmap.ftr";
     cost_db = pd.read_feather(pingInfoFilePath, columns=None, use_threads=True);
 
@@ -103,6 +111,7 @@ def main():
             best_cost=travel_cost
             best_sequence=travel_sequence
             print('- improve cost to',best_cost)
+            break
 
 
     column = cost_db['cost']
@@ -129,5 +138,7 @@ def main():
 
     print(best_sequence)
     print(best_cost)
+    travel=list(best_sequence)
+    rospy.set_param("/precompute_trees/travel",travel)
 if __name__ == "__main__":
     main()
