@@ -10,9 +10,9 @@ import feather
 #pip3 instal pyarrow
 
 def client():
-    rospy.init_node('pyramid_client')
+    rospy.init_node('convert_to_pandas')
 
-    cost_map=rospy.get_param("/compute_paths/cost_map")
+    cost_map=rospy.get_param("/precompute_trees/cost_map")
 
     root=[]
     root_ik_number=[]
@@ -29,7 +29,7 @@ def client():
     d = {'root': root, 'root_ik_number': root_ik_number, 'goal': goal, 'goal_ik_number': goal_ik_number, 'cost': cost}
     df = pd.DataFrame(data=d)
 
-    pingInfoFilePath = "./serverpings.ftr";
+    pingInfoFilePath = "./costmap.ftr";
     df.to_feather(pingInfoFilePath);
 
 if __name__ == "__main__":
