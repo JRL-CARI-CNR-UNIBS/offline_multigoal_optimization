@@ -4,9 +4,9 @@
 # Ant Colony System Optimization for Generalized Traveling Salesman Problem
 # =============================================================================
 
-import time
+import rospy
 import random
-from typing import List, Dict
+from typing import List, Dict, Tuple
 
 import pandas as pd
 
@@ -36,18 +36,18 @@ class Ant():
         else:
             self.missing = missing.copy()
 
+    def set_node(self, node: str) -> None:
+        self.node = node
+        
+    def set_ik(self, ik: int) -> None:
+        self.ik = ik
+
     def move(self, node: str, ik: str) -> None:
-        self.set_node(node)
-        self.set_ik(ik)
+        self.node = node
+        self.ik = ik
         self.add_node_to_trail()
         self.update_cost()
         self.update_missing()
-
-    def set_node(self, node: str) -> None:
-        self.node = node
-
-    def set_ik(self, ik: int) -> None:
-        self.ik = ik
 
     def add_node_to_trail(self) -> None:
         self.trail.append({"node": self.node, "ik": self.ik})
@@ -61,13 +61,13 @@ class Ant():
                     & (self.cost_db["goal"] == self.trail[-1]["node"])
                     & (self.cost_db["goal_ik_number"] == self.trail[-1]["ik"]),
                     "cost"
-                ]
+                ].iloc[0]
             )
 
     def update_missing(self) -> None:
         self.missing.remove(self.node)
 
-    def get_trail_cost(self):
+    def get_trail_cost(self) -> float:
         total_cost = 0
         vm1 = self.trail[0]
         for v in self.trail[1:]:
@@ -78,12 +78,12 @@ class Ant():
                     & (self.cost_db["goal"] == v["node"])
                     & (self.cost_db["goal_ik_number"] == v["ik"]),
                     "cost"
-                ]
+                ].iloc[0]
             ) + total_cost
             vm1 = v
         return total_cost
 
-    def get_trail_index(self):
+    def get_trail_index(self) -> List[int]:
         trail_idx = []
         vm1 = self.trail[0]
         for v in self.trail[1:]:
@@ -98,16 +98,11 @@ class Ant():
             vm1 = v
         return trail_idx
 
-    def print_ant(self):
+    def print_ant(self) -> None:
         print("[Ant] Cost: {}".format(self.cost))
-        print("({:8s},{:2d})".format(self.trail[0]["node"],
-                                     self.trail[0]["ik"]), end="")
-        cc = 0
+        print("[{:8s},{:2d}]".format(self.trail[0]["node"], self.trail[0]["ik"]))
         for t in self.trail[1:]:
-            print(" --> ({:8s},{:2d})".format(t["node"], t["ik"]), end="")
-            if cc % 4 == 3:
-                cc += 1
-                print("")
+            print("[{:8s}, {:2d}]".format(t["node"], t["ik"]))
         print("")
 
 
@@ -121,7 +116,7 @@ class AntColonySystem():
                  q0: float,
                  ph_init: float,
                  ph_variation: float,
-                 ph_bounds: (float, float),
+                 ph_bounds: Tuple[float, float],
                  max_no_improv: int) -> None:
 
         self.cost_db = cost_db
@@ -150,18 +145,29 @@ class AntColonySystem():
 
         self.best_ant = Ant(self.cost_db, node="", ik=0, cost=float("inf"))
 
-    def run(self) -> (float, int, str):
+    def run(self) -> Tuple[float, int, str]:
         no_improv = 0
         obtained_at = 0
         for it in range(self.number_of_iterations):
             self.ants = [self.create_random_ant() for idx in range(self.number_of_ants)]
 
             # Simulation
+            lost_ants = []
             for _ in range(len(self.nodes) - 1):
-                self.goto_next_node()
+                lost_ants = self.goto_next_node()
+                for dying_ant in lost_ants:
+                    self.ants.remove(dying_ant)
+                if not self.ants:
+                    break
                 self.local_update_ph()
 
             self.update_pweights()
+            
+            if not self.ants:
+                print("[{}] All ants died".format(it))
+                no_improv += 1
+                continue
+
             candidate_best_ant = self.get_best_ant()
             if self.best_ant.cost > candidate_best_ant.cost:
                 self.best_ant = candidate_best_ant
@@ -244,7 +250,7 @@ class AntColonySystem():
                     & (self.cost_db["root_ik_number"] == ant.trail[-2]["ik"])
                     & (self.cost_db["goal"] == ant.trail[-1]["node"])
                     & (self.cost_db["goal_ik_number"] == ant.trail[-1]["ik"]),
-                    "ph"]
+                    "ph"].iloc[0]
             ) * (1 - self.rho) + self.rho * self.ph_variation
 
     def global_update_ph(self, best_ant: Ant = None) -> None:
@@ -280,8 +286,12 @@ class AntColonySystem():
         )
 
     def goto_next_node(self) -> None:
+        lost_ants = []
         for ant in self.ants:
             select_idx = self.get_possible_next_node_index(ant)
+            if not select_idx:
+                lost_ants.append(ant)
+                continue
             cumsum_list = self.get_next_node_prob_cumsum(select_idx, ant)
             if random.random() > self.q0:
                 idx = random.choices(select_idx, cum_weights=cumsum_list, k=1)[0]
@@ -290,6 +300,9 @@ class AntColonySystem():
 
             ant.move(str(self.cost_db.at[idx, "goal"]),
                      int(self.cost_db.at[idx, "goal_ik_number"]))
+
+        return lost_ants
+
 
     def print_iteration(self,
                         it: int,
@@ -311,7 +324,7 @@ class AntColonySystem():
         print(" ")
 
     def nearest_neighbour(self) -> Ant:
-        best_ant_ = self.best_ant
+        best_cost = self.best_ant.cost
         start = self.best_ant.trail[0]["node"]
         random_ik = list(range(0, self.ik_number[start]))
         random.shuffle(random_ik)
@@ -328,6 +341,10 @@ class AntColonySystem():
                 db = remain_db.loc[(self.cost_db['root'] == start)
                                    & (remain_db['root_ik_number'] == start_ik)]
 
+                if (db.shape[0]==0):
+                    total_cost=float('inf')
+                    break
+
                 row = db.loc[db['cost'] == db['cost'].min()]
                 next_goal = row.iloc[0]['goal']
                 next_ik = row.iloc[0]['goal_ik_number']
@@ -335,7 +352,7 @@ class AntColonySystem():
                 remaining_nodes.remove(next_goal)
 
                 total_cost += cost
-                if (total_cost > best_ant_.cost):
+                if (total_cost > best_cost):
                     break
                 sequence.append({'node': next_goal, 'ik': next_ik})
 
@@ -343,18 +360,22 @@ class AntColonySystem():
                 start_ik = next_ik
                 remain_db = remain_db.loc[(remain_db['goal'] != start)]
 
-            if (total_cost < best_ant_.cost):
-                best_ant_ = Ant(
-                    self.cost_db,
-                    node=sequence[-1]["node"],
-                    ik=sequence[-1]["ik"],
-                    missing=[],
-                    trail=sequence.copy(),
-                    cost=total_cost)
-        return best_ant_
+            if (total_cost < best_cost):
+                best_cost = total_cost
+                best_sequence = sequence
+
+        return Ant(self.cost_db,
+                   node=best_sequence[-1]["node"],
+                   ik=best_sequence[-1]["ik"],
+                   missing=[],
+                   trail=best_sequence.copy(),
+                   cost=best_cost)
 
 
 def test_ACS(feather_db_path: str, number_of_runs: int = 1) -> None:
+    """
+    Test routine
+    """
     cost_db = pd.read_feather(feather_db_path, columns=None, use_threads=True)
     nodes = list(cost_db.root.unique())
     acs = AntColonySystem(cost_db,
@@ -369,21 +390,35 @@ def test_ACS(feather_db_path: str, number_of_runs: int = 1) -> None:
                           max_no_improv=10,
                           )
     best_list = []
-    tic = time.perf_counter()
     for _ in range(number_of_runs):
-        ltic = time.perf_counter()
         best_ant, _, _ = acs.run()
-        ltoc = time.perf_counter()
         best_list.append(best_ant)
-        print("Single Run Timing: {}".format(ltoc - ltic))
         # print("Exit reason: {}".format(exit_reason))
-    toc = time.perf_counter()
 
     for ba in best_list:
         ba.print_ant()
-    print("Total Timing: {}".format(toc - tic))
 
+    #rospy.set_param("/precompute_trees/travel",travel)
+
+def main() -> None:
+    feather_db_path = "./costmap3.ftr"
+    cost_db = pd.read_feather(feather_db_path, columns=None, use_threads=True)
+    nodes = list(cost_db.root.unique())
+    acs = AntColonySystem(cost_db,
+                          number_of_ants=10,
+                          number_of_iterations=100,
+                          beta=5,
+                          rho=0.5,
+                          q0=0.5,
+                          ph_init=1 / (12 * len(nodes)),
+                          ph_variation=1 / (12 * len(nodes)),
+                          ph_bounds=tuple([x / (12 * len(nodes)) for x in [0.1, 1.05]]),
+                          max_no_improv=10,
+                          )
+    best_ant, _, _ = acs.run()
+    best_ant.print_ant()
+    rospy.set_param("/precompute_trees/travel", best_ant.trail)
 
 if __name__ == "__main__":
-    db_path = "./costmap2.ftr"
-    test_ACS(feather_db_path=db_path, number_of_runs=1)
+    #pd.set_option("mode.chained_assignment","warn")
+    main()
