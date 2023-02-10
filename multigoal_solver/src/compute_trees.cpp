@@ -276,7 +276,7 @@ int main(int argc, char **argv)
 
 
           XmlRpc::XmlRpcValue path=solution->toXmlRpcValue();
-          pnh.setParam(tree_name+"/path/"+tf_name2,path);
+          pnh.setParam(tree_name+"/path/"+tf_name2+"/iksol"+std::to_string(isol_dest),path);
           ROS_INFO("Solution from %s/iksol%d to %s/iksol%d, cost=%f",tf_name.c_str(),isol,tf_name2.c_str(),isol_dest,cost);
           XmlRpc::XmlRpcValue r;
           r["root"]=tf_name;

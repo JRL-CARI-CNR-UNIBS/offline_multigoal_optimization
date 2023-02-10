@@ -214,7 +214,6 @@ int main(int argc, char **argv)
     {
       if (group.at(ip)==igroup)
       {
-        ROS_INFO("i group = %d",group.at(ip));
         req.poses.poses.push_back(all_poses.poses.at(ip));
       }
     }
@@ -237,7 +236,9 @@ int main(int argc, char **argv)
 
     ROS_INFO("processing %zu poses",res.solutions.size());
 
+    std::vector<pathplan::ConnectionPtr> connections;
 
+    bool first_time=true;
     for (size_t ip=0;ip<res.solutions.size();ip++)
     {
       ik_solver_msgs::IkSolution& ik= res.solutions.at(ip);
@@ -257,18 +258,33 @@ int main(int argc, char **argv)
         {
           last_q=p.second;
           connected=true;
+
+          if (first_time)
+          {
+            first_time=false;
+            connections=tree->getConnectionToNode(new_node);
+          }
+          else
+            connections.push_back(new_node->parent_connections_.at(0));
           break;
         }
       }
 
       if (!connected)
         fail_poses.poses.push_back(req.poses.poses.at(ip));
+
     }
 
     poses_pub.publish(fail_poses);
     pnh.setParam("/tmp_tree",tree->toXmlRpcValue());
 
-
+    ROS_INFO("SAVING PATH");
+    if (connections.size()>0)
+    {
+      pathplan::Path path(connections,metrics,checker);
+      XmlRpc::XmlRpcValue xml_path=path.toXmlRpcValue();
+      pnh.setParam(tree_name+"/path/cloud",xml_path);
+    }
 
   }
   ROS_INFO("%s complete the task",pnh.getNamespace().c_str());

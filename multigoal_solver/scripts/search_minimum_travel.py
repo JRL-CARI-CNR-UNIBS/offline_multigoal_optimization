@@ -139,6 +139,9 @@ def main():
     print(best_sequence)
     print(best_cost)
     travel=list(best_sequence)
+
+    for idx in range(1,len(travel)):
+        print('- goals/%s/iksol%d/path/%s/iksol%d' % (travel[idx-1]['node'], travel[idx-1]['ik'], travel[idx]['node'], travel[idx]['ik']))
     rospy.set_param("/precompute_trees/travel",travel)
 if __name__ == "__main__":
     main()
