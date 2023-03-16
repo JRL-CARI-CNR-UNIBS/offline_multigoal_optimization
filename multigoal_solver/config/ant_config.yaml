@@ -1,0 +1,9 @@
+ant_colony:
+    costmap_db: "scripts/costmap3.ftr"
+    number_of_ants: 20
+    number_of_iterations: 100
+    beta: 10
+    rho: 0.1
+    q0: 0.9
+    pheromone_bounds: [0.1, 1.05] # in percentage
+    max_iteration_without_improvements: 10
