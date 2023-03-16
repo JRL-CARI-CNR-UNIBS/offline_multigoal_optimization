@@ -85,6 +85,14 @@ int main(int argc, char **argv)
     ROS_ERROR("%s/group_name is not defined",pnh.getNamespace().c_str());
     return 0;
   }
+
+  std::vector<double> w;
+  if (!pnh.getParam("weight",w))
+  {
+    ROS_ERROR("%s/weight is not defined",pnh.getNamespace().c_str());
+    return 0;
+  }
+
   moveit::planning_interface::MoveGroupInterface move_group(group_name);
   robot_model_loader::RobotModelLoader robot_model_loader("robot_description");
   robot_model::RobotModelPtr           kinematic_model = robot_model_loader.getModel();
@@ -94,6 +102,7 @@ int main(int argc, char **argv)
   Eigen::VectorXd lb(dof);
   Eigen::VectorXd ub(dof);
   pathplan::SamplerPtr sampler=std::make_shared<pathplan::InformedSampler>(lb,ub,lb,ub);
+
 
 
 
@@ -171,7 +180,7 @@ int main(int argc, char **argv)
   for (int inode=0;inode<travel.size();inode++)
   {
     std::string node=travel[inode]["node"];
-    int ik_sol=travel[inode]["ik_sol"];
+    int ik_sol=(int)static_cast<double>(travel[inode]["ik"]);
 
 
     std::string s=node;
@@ -192,6 +201,11 @@ int main(int argc, char **argv)
     q=Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(iksol.data(), iksol.size());
     last_q=q;
     pathplan::NodePtr root = std::make_shared<pathplan::Node>(q);
+
+    Eigen::MatrixXd weight(q.size(),q.size());
+    weight.setIdentity();
+    for (int iax=0;iax<q.size();iax++)
+      weight(iax,iax)=w.at(iax);
 
     if (!checker->check(q))
     {
@@ -230,7 +244,7 @@ int main(int argc, char **argv)
 
 
     pathplan::NodePtr new_node;
-
+    pathplan::NodePtr last_node;
 
 
 
@@ -248,25 +262,46 @@ int main(int argc, char **argv)
       for (ik_solver_msgs::Configuration& c: ik.configurations)
       {
         q=Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(c.configuration.data(), c.configuration.size());
-        double dist=(q-last_q).norm();
+        //double dist=(q-last_q).norm();
+        double dist=std::sqrt(q.transpose()*weight*q);
         ordered_configurations.insert(std::pair<double,Eigen::VectorXd>(dist,q));
       }
 
-      for (const std::pair<double,Eigen::VectorXd>& p: ordered_configurations)
+      if (first_time)
       {
-        if (tree->connect(p.second,new_node))
+        for (const std::pair<double,Eigen::VectorXd>& p: ordered_configurations)
         {
-          last_q=p.second;
-          connected=true;
-
-          if (first_time)
+          if (tree->connect(p.second,new_node))
           {
+            last_q=p.second;
+            connected=true;
+
+
             first_time=false;
+            last_node=new_node;
             connections=tree->getConnectionToNode(new_node);
+
+
+            break;
           }
-          else
-            connections.push_back(new_node->parent_connections_.at(0));
-          break;
+        }
+      }
+      else
+      {
+        for (const std::pair<double,Eigen::VectorXd>& p: ordered_configurations)
+        {
+          if (checker->checkPath(last_node->getConfiguration(),p.second))
+          {
+            last_q=p.second;
+            connected=true;
+
+            new_node=std::make_shared<pathplan::Node>(p.second);
+            pathplan::ConnectionPtr conn=std::make_shared<pathplan::Connection>(last_node,new_node);
+            connections.push_back(conn);
+            tree->addNode(new_node);
+            last_node=new_node;
+            break;
+          }
         }
       }
 
@@ -275,15 +310,20 @@ int main(int argc, char **argv)
 
     }
 
+
     poses_pub.publish(fail_poses);
     pnh.setParam("/tmp_tree",tree->toXmlRpcValue());
 
-    ROS_INFO("SAVING PATH");
+    ROS_INFO("SAVING PATH %s connections=%zu",tree_name.c_str(),connections.size());
     if (connections.size()>0)
     {
       pathplan::Path path(connections,metrics,checker);
       XmlRpc::XmlRpcValue xml_path=path.toXmlRpcValue();
       pnh.setParam(tree_name+"/path/cloud",xml_path);
+    }
+    else
+    {
+      pnh.deleteParam(tree_name+"/path/cloud");
     }
 
   }

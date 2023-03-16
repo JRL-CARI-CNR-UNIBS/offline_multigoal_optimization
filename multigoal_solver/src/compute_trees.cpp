@@ -152,7 +152,15 @@ int main(int argc, char **argv)
         {
           best_cost_map.insert(std::pair<std::pair<std::string,std::string>,double>(p,std::numeric_limits<double>::infinity()));
         }
-        for (int isol2=0;isol2<number_ik;isol2++)
+
+        int number_ik2;
+        if (!nh.getParam("/goals/"+tf_name2+"/number_of_ik",number_ik2))
+        {
+          ROS_ERROR_STREAM("unable to read parameter "<< "/goals/"+tf_name2+"/number_of_ik");
+          return 0;
+        }
+
+        for (int isol2=0;isol2<number_ik2;isol2++)
         {
           std::string tree_name2="/goals/"+tf_name2+"/iksol"+std::to_string(isol2);
           if (!nh.getParam(tree_name2+"/root",iksol))
