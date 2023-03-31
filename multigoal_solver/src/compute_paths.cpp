@@ -246,10 +246,6 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
       }
     }
 
-    ROS_INFO("%zu poses",ik_req.poses.poses.size());
-
-
-
     if (!ik_client.call(ik_req,ik_res))
     {
       ROS_ERROR("%s unable to call ik service",pnh.getNamespace().c_str());

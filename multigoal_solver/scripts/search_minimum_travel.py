@@ -9,9 +9,7 @@ import yaml
 #sudo apt install python3-feather-format
 #pip3 instal pyarrow
 
-def genClosestFirstTravel(nodes,ik_number,cost_db):
-    best_cost=float('inf')
-    best_sequence=[]
+def genClosestFirstTravel(nodes,ik_number,cost_db,best_cost=float('inf'),best_sequence=[]):
     random_nodes=nodes.copy()
     random.shuffle(random_nodes)
 
@@ -115,8 +113,10 @@ def main():
         ik_number[n]=int(1+cost_db.loc[cost_db['root'] == n]['root_ik_number'].max())
 
     best_cost=float('inf')
+    best_sequence=[]
     for idx in range(0,100):
-        travel_cost, travel_sequence=genClosestFirstTravel(nodes,ik_number,cost_db)
+        print("cycle ",idx)
+        travel_cost, travel_sequence=genClosestFirstTravel(nodes,ik_number,cost_db,best_cost,best_sequence)
         if travel_cost<best_cost:
             best_cost=travel_cost
             best_sequence=travel_sequence
@@ -126,32 +126,26 @@ def main():
 
     column = cost_db['cost']
     min_cost = cost_db['cost'].min()
-    # n=len(nodes)
-    # n-1 path between nodes
-    # min_cost min lenght of a path
-    # best cost: best sum of path costs
-    # path_cost>=min_cost*(n-1)
-    # if a path has a cost higher than (best_cost-(n-2)*min_cost) we can skip it
+
     count = column[column > best_cost-(min_cost*(len(nodes)-2))].count()
     print('row with too much cost',count,'over', cost_db.shape[0])
     filter_db=cost_db.loc[cost_db['cost']<(best_cost-(min_cost*(len(nodes)-2)))]
 
-
-    # for idx in range(0,10000):
-    #
-    #     travel_cost, travel_sequence=genTravel(nodes,ik_number,filter_db,best_cost)
-    #     if travel_cost<best_cost:
-    #         best_cost=travel_cost
-    #         best_sequence=travel_sequence
-    #         print('improve cost to',best_cost)
-
+    for idx in range(0,10):
+        print("cycle ",idx)
+        travel_cost, travel_sequence=genClosestFirstTravel(nodes,ik_number,filter_db,best_cost,best_sequence)
+        if travel_cost<best_cost:
+            best_cost=travel_cost
+            best_sequence=travel_sequence
+            print('- improve cost to',best_cost)
+            break
 
     print(best_sequence)
     print(best_cost)
     travel=list(best_sequence)
 
     for idx in range(1,len(travel)):
-        print('- goals/%s/iksol%d/path/%s/iksol%d' % (travel[idx-1]['node'], travel[idx-1]['ik'], travel[idx]['node'], travel[idx]['ik']))
+        print('- %s/iksol%d ==> %s/iksol%d' % (travel[idx-1]['node'], travel[idx-1]['ik'], travel[idx]['node'], travel[idx]['ik']))
     rospy.set_param("/precompute_trees/travel",travel)
 
     with open(yaml_path+'/config/travel.yaml', 'w') as file:
