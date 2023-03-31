@@ -63,9 +63,6 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
   planning_scene::PlanningScenePtr     planning_scene = std::make_shared<planning_scene::PlanningScene>(kinematic_model);
   std::vector<std::string> joint_names = kinematic_model->getJointModelGroup(group_name)->getActiveJointModelNames();
   unsigned int dof = joint_names.size();
-  Eigen::VectorXd lb(dof);
-  Eigen::VectorXd ub(dof);
-  pathplan::SamplerPtr sampler=std::make_shared<pathplan::InformedSampler>(lb,ub,lb,ub);
 
 
 
@@ -157,6 +154,20 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
     std::string node=travel[inode]["node"];
     int ik_sol=(int)static_cast<double>(travel[inode]["ik"]);
 
+    if (!nh.getParam("/goals/"+node+"/joint_names",joint_names))
+    {
+      ROS_ERROR_STREAM("unable to read parameter /goals/"<< node+"/joint_names");
+      res.success=false;
+      return true;
+    }
+
+    ik_solver_msgs::GetIkArrayRequest ik_req;
+    ik_solver_msgs::GetIkArrayResponse ik_res;
+    ik_req.poses.header=all_poses.header;
+    ik_req.seed_joint_names=joint_names;
+    ik_solver_msgs::Configuration seed;
+
+
 
     std::string s=node;
     s.erase(std::remove_if(std::begin(s), std::end(s), [](char ch) { return !std::isdigit(ch); }), s.end());
@@ -166,18 +177,25 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
     std::string tree_name="/goals/"+node+"/iksol"+std::to_string(ik_sol);
     std::vector<double> iksol;
 
+
+
     if (!nh.getParam(tree_name+"/root",iksol))
     {
       ROS_ERROR_STREAM("unable to read parameter "<< tree_name+"/root");
       res.success=false;
       return true;
     }
+
+    seed.configuration=iksol;
+    ik_req.seeds.push_back(seed);
+
     q=Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(iksol.data(), iksol.size());
     Eigen::VectorXd approach=q;
     Eigen::MatrixXd weight(q.size(),q.size());
     weight.setIdentity();
     for (int iax=0;iax<q.size();iax++)
       weight(iax,iax)=w.at(iax);
+
 
 
     if (first_node)
@@ -216,12 +234,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
       }
     }
 
-    ik_solver_msgs::GetIkArrayRequest ik_req;
-    ik_solver_msgs::GetIkArrayResponse ik_res;
-    ik_req.poses.header=all_poses.header;
-    ik_solver_msgs::Configuration seed;
-    seed.configuration.push_back(ik_sol);
-    ik_req.seeds.push_back(seed);
+
 
     std::vector<int> pose_number;
     for (int ip=0;ip<n_points;ip++)
@@ -289,7 +302,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
       }
       if (!connected)
       {
-        ROS_INFO("Pose %zu of %zu (keypoint %s): Try connect",ip,ik_res.solutions.size(),node.c_str());
+        ROS_DEBUG("Pose %zu of %zu (keypoint %s): Try connect",ip,ik_res.solutions.size(),node.c_str());
         tree->changeRoot(last_node);
 
         for (const std::pair<double,Eigen::VectorXd>& p: ordered_configurations)
@@ -303,7 +316,10 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
             last_node=new_node;
             std::vector<pathplan::ConnectionPtr> tmp_connections=tree->getConnectionToNode(new_node);
             for (size_t iconnection=0;iconnection<tmp_connections.size();iconnection++)
+            {
+              connections.push_back(tmp_connections.at(iconnection));
               order_pose_number.push_back(pose_number.at(ip));
+            }
 
             break;
           }
@@ -335,7 +351,24 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
     }
     else
     {
-      ROS_ERROR("Unable to come back to approach");
+      tree->changeRoot(last_node);
+
+      if (tree->connect(approach,new_node))
+      {
+        last_q=approach;
+
+        last_node=new_node;
+        std::vector<pathplan::ConnectionPtr> tmp_connections=tree->getConnectionToNode(new_node);
+        for (size_t iconnection=0;iconnection<tmp_connections.size();iconnection++)
+        {
+          connections.push_back(tmp_connections.at(iconnection));
+          order_pose_number.push_back(-10);
+        }
+      }
+      else
+        ROS_ERROR("Unable to come back to approach");
+
+
     }
 
     ROS_INFO("saving to approach");
