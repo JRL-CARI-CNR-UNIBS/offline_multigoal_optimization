@@ -5,6 +5,8 @@ import math
 import numpy as np
 import pandas as pd
 
+import rospkg
+
 import feather
 #sudo apt install python3-feather-format
 #pip3 instal pyarrow
@@ -12,6 +14,9 @@ import feather
 def client():
     rospy.init_node('convert_to_pandas')
 
+
+    rospack = rospkg.RosPack()
+    yaml_path=rospack.get_path('leonardo_launchers')
     cost_map=rospy.get_param("/precompute_trees/cost_map")
 
     root=[]
@@ -29,7 +34,7 @@ def client():
     d = {'root': root, 'root_ik_number': root_ik_number, 'goal': goal, 'goal_ik_number': goal_ik_number, 'cost': cost}
     df = pd.DataFrame(data=d)
 
-    pingInfoFilePath = "./costmap.ftr";
+    pingInfoFilePath = yaml_path+"/config/costmap.ftr";
     df.to_feather(pingInfoFilePath);
     print(df)
 if __name__ == "__main__":

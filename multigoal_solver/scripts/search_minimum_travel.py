@@ -4,6 +4,8 @@ import random
 import rospy
 import feather
 import signal
+import rospkg
+import yaml
 #sudo apt install python3-feather-format
 #pip3 instal pyarrow
 
@@ -30,7 +32,7 @@ def genClosestFirstTravel(nodes,ik_number,cost_db):
             while len(remaining_nodes)>0:
                 db=remain_db.loc[(cost_db['root'] == start) &\
                 (remain_db['root_ik_number'] == start_ik)]
-                
+
                 if (db.shape[0]==0):
                     total_cost=float('inf')
                     break
@@ -101,7 +103,10 @@ def genTravel(nodes,ik_number,cost_db,best_cost):
 def main():
     rospy.init_node('min_travel')
 
-    pingInfoFilePath = "./costmap.ftr";
+
+    rospack = rospkg.RosPack()
+    yaml_path=rospack.get_path('leonardo_launchers')
+    pingInfoFilePath = yaml_path+"/config/costmap.ftr";
     cost_db = pd.read_feather(pingInfoFilePath, columns=None, use_threads=True);
 
     nodes=list(cost_db.root.unique())
@@ -148,5 +153,8 @@ def main():
     for idx in range(1,len(travel)):
         print('- goals/%s/iksol%d/path/%s/iksol%d' % (travel[idx-1]['node'], travel[idx-1]['ik'], travel[idx]['node'], travel[idx]['ik']))
     rospy.set_param("/precompute_trees/travel",travel)
+
+    with open(yaml_path+'/config/travel.yaml', 'w') as file:
+        documents = yaml.dump(travel, file)
 if __name__ == "__main__":
     main()
