@@ -3,6 +3,7 @@ import pandas as pd
 import random
 import rospy
 import feather
+import signal
 #sudo apt install python3-feather-format
 #pip3 instal pyarrow
 
@@ -11,9 +12,13 @@ def genClosestFirstTravel(nodes,ik_number,cost_db):
     best_sequence=[]
     random_nodes=nodes.copy()
     random.shuffle(random_nodes)
+
+    explored_nodes=list([])
     for start in random_nodes:
         random_ik=list(range(0,ik_number[start]))
         random.shuffle(random_ik)
+        explored_nodes.append(start)
+
         for start_ik in random_ik:
             remaining_nodes=nodes.copy()
             remaining_nodes.remove(start)
@@ -22,11 +27,10 @@ def genClosestFirstTravel(nodes,ik_number,cost_db):
             total_cost=0
 
             remain_db=cost_db.loc[(cost_db['goal'] != start)]
-
             while len(remaining_nodes)>0:
                 db=remain_db.loc[(cost_db['root'] == start) &\
                 (remain_db['root_ik_number'] == start_ik)]
-
+                
                 if (db.shape[0]==0):
                     total_cost=float('inf')
                     break
@@ -38,6 +42,7 @@ def genClosestFirstTravel(nodes,ik_number,cost_db):
                 remaining_nodes.remove(next)
 
                 total_cost+=cost
+
                 if (total_cost>best_cost):  # abort this solution because is worst than the best one
                     break
                 sequence.append({'node': next,'ik': float(next_ik)})
@@ -105,7 +110,7 @@ def main():
         ik_number[n]=int(1+cost_db.loc[cost_db['root'] == n]['root_ik_number'].max())
 
     best_cost=float('inf')
-    for idx in range(0,10):
+    for idx in range(0,100):
         travel_cost, travel_sequence=genClosestFirstTravel(nodes,ik_number,cost_db)
         if travel_cost<best_cost:
             best_cost=travel_cost

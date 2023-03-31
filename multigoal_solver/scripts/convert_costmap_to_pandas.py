@@ -31,6 +31,6 @@ def client():
 
     pingInfoFilePath = "./costmap.ftr";
     df.to_feather(pingInfoFilePath);
-
+    print(df)
 if __name__ == "__main__":
     client()

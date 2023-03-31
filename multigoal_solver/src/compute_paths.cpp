@@ -14,83 +14,47 @@
 #include <sensor_msgs/PointCloud2.h>
 #include <geometry_msgs/PoseArray.h>
 #include <ik_solver_msgs/GetIkArray.h>
+#include <std_srvs/Trigger.h>
+#include <moveit_msgs/GetPlanningScene.h>
+
+
 
 void pointCloudCb(const sensor_msgs::PointCloud2ConstPtr& msg, sensor_msgs::PointCloud2Ptr& pc)
 {
   pc.reset(new sensor_msgs::PointCloud2(*msg));
 }
 
-
-//bool computePathFromHere(const std::vector<ik_solver_msgs::IkSolution>& iksols,
-//                         const Eigen::VectorXd& q,
-//                         const size_t& idx,
-//                         pathplan::CollisionCheckerPtr& checker,
-//                         std::vector<Eigen::VectorXd>& nodes)
-//{
-
-//  if (idx>=iksols.size())
-//    return true;
-
-//  const ik_solver_msgs::IkSolution& iksol=iksols.at(idx);
-
-//  std::multimap<double,Eigen::VectorXd> ordered_configurations;
-
-//  for (const ik_solver_msgs::Configuration& c: iksol.configurations)
-//  {
-//    Eigen::VectorXd child=Eigen::Map<const Eigen::VectorXd, Eigen::Unaligned>(c.configuration.data(), c.configuration.size());
-//    double dist=(child-q).norm();
-//    ordered_configurations.insert(std::pair<double,Eigen::VectorXd>(dist,child));
-//  }
-
-//  for (const std::pair<double,Eigen::VectorXd>& p: ordered_configurations)
-//  {
-//    if (checker->checkPath(q,p.second))
-//    {
-//      std::vector<Eigen::VectorXd> child_nodes;
-//      if (computePathFromHere(iksols,
-//                              p.second,
-//                              idx+1,
-//                              checker,
-//                              child_nodes))
-//      {
-//        nodes.clear();
-//        nodes.push_back(q);
-//        nodes.insert(nodes.end(), child_nodes.begin(), child_nodes.end());
-
-//        ROS_INFO("lista: ");
-//        for (const Eigen::VectorXd& x: nodes)
-//        {
-//          ROS_INFO_STREAM("- "<<x.transpose());
-//        }
-//        return true;
-//      }
-//    }
-//  }
-//  return false;
-//}
-
-
-int main(int argc, char **argv)
+bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
 {
-  ros::init(argc, argv, "test_subtree");
   ros::NodeHandle nh;
   ros::NodeHandle pnh("~");
   ros::NodeHandle solver_nh("~/solver");
-
 
 
   std::string group_name = "manipulator";
   if (!pnh.getParam("group_name",group_name))
   {
     ROS_ERROR("%s/group_name is not defined",pnh.getNamespace().c_str());
-    return 0;
+    res.success=false;
+    return true;
+  }
+
+  ros::ServiceClient ps_client = nh.serviceClient<moveit_msgs::GetPlanningScene>("/get_planning_scene");
+  ps_client.waitForExistence();
+  moveit_msgs::GetPlanningScene ps_srv;
+  if (!ps_client.call(ps_srv))
+  {
+    ROS_ERROR("Error on  get_planning_scene srv not ok");
+    res.success=false;
+    return true;
   }
 
   std::vector<double> w;
   if (!pnh.getParam("weight",w))
   {
     ROS_ERROR("%s/weight is not defined",pnh.getNamespace().c_str());
-    return 0;
+    res.success=false;
+    return true;
   }
 
   moveit::planning_interface::MoveGroupInterface move_group(group_name);
@@ -110,7 +74,8 @@ int main(int argc, char **argv)
   double steps=pnh.param("collision_steps",0.01);
   double maximum_distance=pnh.param("maximum_distance",0.01);
 
-  pathplan::CollisionCheckerPtr checker = std::make_shared<pathplan::ParallelMoveitCollisionChecker>(planning_scene, group_name,num_threads,steps);
+  pathplan::CollisionCheckerPtr checker = std::make_shared<pathplan::MoveitCollisionChecker>(planning_scene, group_name,maximum_distance);
+  checker->setPlanningSceneMsg(ps_srv.response.scene);
   pathplan::MetricsPtr metrics=std::make_shared<pathplan::Metrics>();
 
   XmlRpc::XmlRpcValue travel;
@@ -118,7 +83,8 @@ int main(int argc, char **argv)
   if (!pnh.getParam("travel",travel))
   {
     ROS_ERROR("%s/travel is not defined",pnh.getNamespace().c_str());
-    return 0;
+    res.success=false;
+    return true;
   }
 
   sensor_msgs::PointCloud2Ptr pc;
@@ -127,7 +93,7 @@ int main(int argc, char **argv)
 
   ros::ServiceClient ik_client=nh.serviceClient<ik_solver_msgs::GetIkArray>("/ik_solver/get_ik_array");
 
-  ros::Publisher poses_pub=nh.advertise<geometry_msgs::PoseArray>("req_poses",10,true);
+  ros::Publisher failed_poses_pub=nh.advertise<geometry_msgs::PoseArray>("fail_poses",10,true);
 
 
   ROS_INFO("%s is waiting for the point cloud",pnh.getNamespace().c_str());
@@ -177,6 +143,15 @@ int main(int argc, char **argv)
   geometry_msgs::PoseArray fail_poses;
   fail_poses.header.frame_id=pc->header.frame_id;
 
+  bool first_node=true;
+  bool first_time=true;
+  pathplan::TreePtr tree;
+
+  pathplan::NodePtr last_node;
+  pathplan::NodePtr new_node;
+
+  std::vector<pathplan::ConnectionPtr> connections;
+  std::vector<int> order_pose_number;
   for (int inode=0;inode<travel.size();inode++)
   {
     std::string node=travel[inode]["node"];
@@ -188,74 +163,96 @@ int main(int argc, char **argv)
     int igroup=std::stoi(s);
     ROS_INFO("node %s ik=%d, group=%d",node.c_str(),ik_sol,igroup);
 
-
     std::string tree_name="/goals/"+node+"/iksol"+std::to_string(ik_sol);
     std::vector<double> iksol;
 
     if (!nh.getParam(tree_name+"/root",iksol))
     {
       ROS_ERROR_STREAM("unable to read parameter "<< tree_name+"/root");
-      return 0;
+      res.success=false;
+      return true;
     }
-
     q=Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(iksol.data(), iksol.size());
-    last_q=q;
-    pathplan::NodePtr root = std::make_shared<pathplan::Node>(q);
-
+    Eigen::VectorXd approach=q;
     Eigen::MatrixXd weight(q.size(),q.size());
     weight.setIdentity();
     for (int iax=0;iax<q.size();iax++)
       weight(iax,iax)=w.at(iax);
 
-    if (!checker->check(q))
+
+    if (first_node)
     {
-      ROS_FATAL("this should not happen");
-      return 0;
+
+
+
+      last_q=q;
+      pathplan::NodePtr root = std::make_shared<pathplan::Node>(q);
+      last_node=root;
+
+
+      if (!checker->check(q))
+      {
+        ROS_FATAL("root not is unreachable: this should not happen");
+        res.success=false;
+        return true;
+      }
+
+      tree=std::make_shared<pathplan::Tree>(root,maximum_distance,checker,metrics);
+      first_node=false;
+    }
+    else
+    {
+      if (checker->checkPath(last_node->getConfiguration(),approach))
+      {
+        last_q=approach;
+        new_node=std::make_shared<pathplan::Node>(approach);
+        pathplan::ConnectionPtr conn=std::make_shared<pathplan::Connection>(last_node,new_node);
+        conn->add();
+        connections.push_back(conn);
+        order_pose_number.push_back(-10);
+        tree->addNode(new_node);
+        last_node=new_node;
+        ROS_INFO("connect with next keypoint");
+      }
     }
 
-    pathplan::TreePtr tree=std::make_shared<pathplan::Tree>(root,maximum_distance,checker,metrics);
-
-
-
-    ik_solver_msgs::GetIkArrayRequest req;
-    ik_solver_msgs::GetIkArrayResponse res;
-    req.poses.header=all_poses.header;
+    ik_solver_msgs::GetIkArrayRequest ik_req;
+    ik_solver_msgs::GetIkArrayResponse ik_res;
+    ik_req.poses.header=all_poses.header;
     ik_solver_msgs::Configuration seed;
     seed.configuration.push_back(ik_sol);
-    req.seeds.push_back(seed);
+    ik_req.seeds.push_back(seed);
 
+    std::vector<int> pose_number;
     for (int ip=0;ip<n_points;ip++)
     {
       if (group.at(ip)==igroup)
       {
-        req.poses.poses.push_back(all_poses.poses.at(ip));
+        ik_req.poses.poses.push_back(all_poses.poses.at(ip));
+        pose_number.push_back(ip);
       }
     }
 
-    ROS_INFO("%zu poses",req.poses.poses.size());
+    ROS_INFO("%zu poses",ik_req.poses.poses.size());
 
 
 
-    if (!ik_client.call(req,res))
+    if (!ik_client.call(ik_req,ik_res))
     {
       ROS_ERROR("%s unable to call ik service",pnh.getNamespace().c_str());
-      return 0;
+      res.success=false;
+      return true;
     }
 
 
-    pathplan::NodePtr new_node;
-    pathplan::NodePtr last_node;
+    ROS_INFO("processing %zu poses",ik_res.solutions.size());
 
 
 
-    ROS_INFO("processing %zu poses",res.solutions.size());
-
-    std::vector<pathplan::ConnectionPtr> connections;
-
-    bool first_time=true;
-    for (size_t ip=0;ip<res.solutions.size();ip++)
+    for (size_t ip=0;ip<ik_res.solutions.size();ip++)
     {
-      ik_solver_msgs::IkSolution& ik= res.solutions.at(ip);
+      ROS_DEBUG("Pose %zu of %zu (keypoint %s)",ip,ik_res.solutions.size(),node.c_str());
+      ik_solver_msgs::IkSolution& ik= ik_res.solutions.at(ip);
       bool connected=false;
 
       std::multimap<double,Eigen::VectorXd> ordered_configurations;
@@ -263,30 +260,14 @@ int main(int argc, char **argv)
       {
         q=Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(c.configuration.data(), c.configuration.size());
         //double dist=(q-last_q).norm();
-        double dist=std::sqrt(q.transpose()*weight*q);
-        ordered_configurations.insert(std::pair<double,Eigen::VectorXd>(dist,q));
-      }
-
-      if (first_time)
-      {
-        for (const std::pair<double,Eigen::VectorXd>& p: ordered_configurations)
+        if (checker->check(q))
         {
-          if (tree->connect(p.second,new_node))
-          {
-            last_q=p.second;
-            connected=true;
-
-
-            first_time=false;
-            last_node=new_node;
-            connections=tree->getConnectionToNode(new_node);
-
-
-            break;
-          }
+          double dist=std::sqrt(q.transpose()*weight*q);
+          ordered_configurations.insert(std::pair<double,Eigen::VectorXd>(dist,q));
         }
       }
-      else
+
+      if (!first_time)
       {
         for (const std::pair<double,Eigen::VectorXd>& p: ordered_configurations)
         {
@@ -297,29 +278,77 @@ int main(int argc, char **argv)
 
             new_node=std::make_shared<pathplan::Node>(p.second);
             pathplan::ConnectionPtr conn=std::make_shared<pathplan::Connection>(last_node,new_node);
+            conn->add();
             connections.push_back(conn);
+            order_pose_number.push_back(pose_number.at(ip));
             tree->addNode(new_node);
             last_node=new_node;
             break;
           }
         }
       }
+      if (!connected)
+      {
+        ROS_INFO("Pose %zu of %zu (keypoint %s): Try connect",ip,ik_res.solutions.size(),node.c_str());
+        tree->changeRoot(last_node);
+
+        for (const std::pair<double,Eigen::VectorXd>& p: ordered_configurations)
+        {
+          if (tree->connect(p.second,new_node))
+          {
+            last_q=p.second;
+            connected=true;
+
+            first_time=false;
+            last_node=new_node;
+            std::vector<pathplan::ConnectionPtr> tmp_connections=tree->getConnectionToNode(new_node);
+            for (size_t iconnection=0;iconnection<tmp_connections.size();iconnection++)
+              order_pose_number.push_back(pose_number.at(ip));
+
+            break;
+          }
+        }
+      }
 
       if (!connected)
-        fail_poses.poses.push_back(req.poses.poses.at(ip));
+      {
+        ROS_INFO("Unreachable: Pose %zu of %zu (keypoint %s)",ip,ik_res.solutions.size(),node.c_str());
+
+        fail_poses.poses.push_back(ik_req.poses.poses.at(ip));
+      }
 
     }
 
 
-    poses_pub.publish(fail_poses);
-    pnh.setParam("/tmp_tree",tree->toXmlRpcValue());
+
+    ROS_INFO("return to approach");
+    if (checker->checkPath(last_node->getConfiguration(),approach))
+    {
+      last_q=approach;
+      new_node=std::make_shared<pathplan::Node>(approach);
+      pathplan::ConnectionPtr conn=std::make_shared<pathplan::Connection>(last_node,new_node);
+      conn->add();
+      connections.push_back(conn);
+      order_pose_number.push_back(-10);
+      tree->addNode(new_node);
+      last_node=new_node;
+    }
+    else
+    {
+      ROS_ERROR("Unable to come back to approach");
+    }
+
+    ROS_INFO("saving to approach");
+    failed_poses_pub.publish(fail_poses);
+    //pnh.setParam("/tmp_tree",tree->toXmlRpcValue());
 
     ROS_INFO("SAVING PATH %s connections=%zu",tree_name.c_str(),connections.size());
     if (connections.size()>0)
     {
-      pathplan::Path path(connections,metrics,checker);
-      XmlRpc::XmlRpcValue xml_path=path.toXmlRpcValue();
-      pnh.setParam(tree_name+"/path/cloud",xml_path);
+      //pathplan::Path path(connections,metrics,checker);
+      //XmlRpc::XmlRpcValue xml_path=path.toXmlRpcValue();
+      //pnh.setParam(tree_name+"/path/cloud",xml_path);
+      //pnh.setParam(tree_name+"/path/cloud_pose_number",order_pose_number);
     }
     else
     {
@@ -328,6 +357,26 @@ int main(int argc, char **argv)
 
   }
   ROS_INFO("%s complete the task",pnh.getNamespace().c_str());
+
+  if (connections.size()>0)
+  {
+    pathplan::Path path(connections,metrics,checker);
+    XmlRpc::XmlRpcValue xml_path=path.toXmlRpcValue();
+    pnh.setParam("/complete/path/cloud",xml_path);
+    pnh.setParam("/complete/path/cloud_pose_number",order_pose_number);
+  }
+  res.success=true;
+  return true;
+}
+
+
+
+int main(int argc, char **argv)
+{
+  ros::init(argc, argv, "test_subtree");
+  ros::NodeHandle nh;
+
+  ros::ServiceServer srv=nh.advertiseService("/compute_path",pathCb);
   ros::spin();
   return 0;
 }
