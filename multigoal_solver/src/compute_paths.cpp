@@ -371,22 +371,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
 
     }
 
-    ROS_INFO("saving to approach");
     failed_poses_pub.publish(fail_poses);
-    //pnh.setParam("/tmp_tree",tree->toXmlRpcValue());
-
-    ROS_INFO("SAVING PATH %s connections=%zu",tree_name.c_str(),connections.size());
-    if (connections.size()>0)
-    {
-      //pathplan::Path path(connections,metrics,checker);
-      //XmlRpc::XmlRpcValue xml_path=path.toXmlRpcValue();
-      //pnh.setParam(tree_name+"/path/cloud",xml_path);
-      //pnh.setParam(tree_name+"/path/cloud_pose_number",order_pose_number);
-    }
-    else
-    {
-      pnh.deleteParam(tree_name+"/path/cloud");
-    }
 
   }
   ROS_INFO("%s complete the task",pnh.getNamespace().c_str());
