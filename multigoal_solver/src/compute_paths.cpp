@@ -149,6 +149,10 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
 
   std::vector<pathplan::ConnectionPtr> connections;
   std::vector<int> order_pose_number;
+
+  XmlRpc::XmlRpcValue configurations;
+  int configurations_size=0;
+
   for (int inode=0;inode<travel.size();inode++)
   {
     std::string node=travel[inode]["node"];
@@ -200,13 +204,9 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
 
     if (first_node)
     {
-
-
-
       last_q=q;
       pathplan::NodePtr root = std::make_shared<pathplan::Node>(q);
       last_node=root;
-
 
       if (!checker->check(q))
       {
@@ -322,13 +322,24 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
         }
       }
 
+
+
       if (!connected)
       {
         ROS_INFO("Unreachable: Pose %zu of %zu (keypoint %s)",ip,ik_res.solutions.size(),node.c_str());
 
         fail_poses.poses.push_back(ik_req.poses.poses.at(ip));
       }
-
+      else
+      {
+        XmlRpc::XmlRpcValue tmp_conf;
+        for (int iax=0;iax<last_q.size();iax++)
+        {
+          tmp_conf[iax]=last_q(iax);
+        }
+        configurations[configurations_size]=tmp_conf;
+        configurations_size++;
+      }
     }
 
 
@@ -378,6 +389,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
     XmlRpc::XmlRpcValue xml_path=path.toXmlRpcValue();
     pnh.setParam("/complete/path/cloud",xml_path);
     pnh.setParam("/complete/path/cloud_pose_number",order_pose_number);
+    pnh.setParam("/complete/configurations",configurations);
   }
   res.success=true;
   return true;
