@@ -18,8 +18,14 @@ class TravelOptimizer:
 
     def optimze_path(self, req: TriggerRequest):
         rospack = rospkg.RosPack()
-        yaml_path = rospack.get_path('leonardo_launchers')
-        pingInfoFilePath = yaml_path + "/config/costmap.ftr"
+        yaml_path = rospack.get_path('leonardo_meshes')
+        
+        rospack = rospkg.RosPack()
+        config_path=rospack.get_path('leonardo_meshes') 
+        blade_info = rospy.get_param("/blade_info")
+        file_name=config_path+"/config/results/"+blade_info['cloud_filename']
+        pingInfoFilePath = os.path.join(file_name+'_costmap.ftr')
+
         cost_db = pd.read_feather(pingInfoFilePath, columns=None, use_threads=True)
 
         self.nodes = list(cost_db.root.unique())
@@ -68,12 +74,15 @@ class TravelOptimizer:
 
         rospy.set_param("/precompute_trees/travel", travel)
 
-        with open(os.path.join(yaml_path, 'config/travel.yaml'), 'w') as file:
+        blade_info = rospy.get_param("/blade_info")
+        file_name=yaml_path+"/config/results/"+blade_info['cloud_filename']
+
+        with open(os.path.join(file_name+'_travel.yaml'), 'w') as file:
             documents = yaml.dump(travel, file)
 
         resp = TriggerResponse()
         resp.success = True
-        resp.message = f'path saved at: {os.path.join(yaml_path, "config/travel.yaml")}'
+        resp.message = f'path saved at: '+file_name+'_travel.yaml'
         return resp
 
     def genClosestFirstTravel(self, random_nodes, ik_number, cost_db, best_cost=float('inf'), best_sequence=[]):
