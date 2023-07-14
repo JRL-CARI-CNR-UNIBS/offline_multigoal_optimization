@@ -88,7 +88,12 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
 
   ros::Subscriber pc_sub=nh.subscribe<sensor_msgs::PointCloud2>("/point_cloud2",100,boost::bind(pointCloudCb,_1,boost::ref(pc)));
 
-  ros::ServiceClient ik_client=nh.serviceClient<ik_solver_msgs::GetIkArray>("/ik_solver/get_ik_array");
+  std::string tool_name;
+  ros::ServiceClient ik_client;
+  if (!nh.getParam("/tool_name",tool_name))
+    ik_client=nh.serviceClient<ik_solver_msgs::GetIkArray>("/ik_solver/get_ik_array");
+  else
+    ik_client=nh.serviceClient<ik_solver_msgs::GetIkArray>("/"+tool_name+"_ik_solver/get_ik_array");
 
   ros::Publisher failed_poses_pub=nh.advertise<geometry_msgs::PoseArray>("fail_poses",10,true);
 
