@@ -165,9 +165,12 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
 
     if (!nh.getParam("/goals/"+node+"/joint_names",joint_names))
     {
-      ROS_ERROR_STREAM("unable to read parameter /goals/"<< node+"/joint_names");
-      res.success=false;
-      return true;
+      ROS_WARN_STREAM("unable to read parameter /goals/"<< node+"/joint_names");
+      //res.success=false;
+      //return true;
+      continue;
+
+
     }
 
     ik_solver_msgs::GetIkArrayRequest ik_req;

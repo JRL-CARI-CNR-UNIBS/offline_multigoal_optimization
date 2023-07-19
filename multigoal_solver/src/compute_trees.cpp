@@ -118,8 +118,8 @@ bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
         int number_ik;
         if (!nh.getParam("/goals/"+tf_name+"/number_of_ik",number_ik))
         {
-            ROS_ERROR_STREAM("unable to read parameter "<< "/goals/"+tf_name+"/number_of_ik");
-            return false;
+            ROS_WARN_STREAM("unable to read parameter /goals/"<< tf_name+"/joint_names");
+            continue;
         }
 
         for (int isol=0;isol<number_ik;isol++)
@@ -164,8 +164,11 @@ bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
                 int number_ik2;
                 if (!nh.getParam("/goals/"+tf_name2+"/number_of_ik",number_ik2))
                 {
-                    ROS_ERROR_STREAM("unable to read parameter "<< "/goals/"+tf_name2+"/number_of_ik");
-                    return 0;
+                  ROS_WARN_STREAM("unable to read parameter /goals/"<< tf_name+"/joint_names");
+                  continue;
+//                    ROS_ERROR_STREAM("unable to read parameter "<< "/goals/"+tf_name2+"/number_of_ik");
+//                    return 0;
+
                 }
 
                 for (int isol2=0;isol2<number_ik2;isol2++)
