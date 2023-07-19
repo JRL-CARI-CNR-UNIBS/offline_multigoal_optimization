@@ -188,6 +188,8 @@ bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
                 }
             }
 
+
+
             ROS_INFO("goal distance are in range [%f,%f]",ordered_goal.begin()->first,(--ordered_goal.end())->first);
 
 
