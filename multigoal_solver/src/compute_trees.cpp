@@ -109,8 +109,9 @@ bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
     XmlRpc::XmlRpcValue result;
     int idx_result=0;
 
-    for (std::string& tf_name: tf_list)
+    for (size_t i=0; i<tf_list.size(); i++)
     {
+        const std::string& tf_name= tf_list.at(i);
         best_cost_from_goal.insert(std::pair<std::string,double>(tf_name,std::numeric_limits<double>::infinity()));
         double& best_cost_from_this_goal=best_cost_from_goal.at(tf_name);
 
@@ -118,7 +119,7 @@ bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
         int number_ik;
         if (!nh.getParam("/goals/"+tf_name+"/number_of_ik",number_ik))
         {
-            ROS_WARN_STREAM("unable to read parameter /goals/"<< tf_name+"/joint_names");
+            ROS_WARN_STREAM("unable to read parameter /goals/"<< tf_name+"/joint_names ("<<i <<"/"<<tf_list.size()<<")");
             continue;
         }
 
@@ -379,10 +380,17 @@ bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
         }
     }
 
-    pnh.setParam("cost_map",result);
-    ROS_INFO("%s complete the task",pnh.getNamespace().c_str());
-
-    res.success=true;
+    if (result.getType()==result.TypeArray && result.size()>0)
+    {
+        pnh.setParam("cost_map",result);
+        ROS_INFO("%s complete the task",pnh.getNamespace().c_str());
+        res.success=true;
+    }
+    else
+    {
+        ROS_ERROR("%s Task Failed",pnh.getNamespace().c_str());
+        res.success=false;
+    }
     return true;
 }
 
