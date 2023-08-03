@@ -18,10 +18,10 @@ class TravelOptimizer:
 
     def optimze_path(self, req: TriggerRequest):
         rospack = rospkg.RosPack()
-        yaml_path = rospack.get_path('leonardo_meshes')
+        yaml_path = rospack.get_path('aware_database')
 
         rospack = rospkg.RosPack()
-        config_path=rospack.get_path('leonardo_meshes')
+        config_path=rospack.get_path('aware_database')
         blade_info = rospy.get_param("/blade_info")
         tool_name = rospy.get_param("/tool_name")
         file_name=config_path+"/config/results/"+blade_info['cloud_filename']

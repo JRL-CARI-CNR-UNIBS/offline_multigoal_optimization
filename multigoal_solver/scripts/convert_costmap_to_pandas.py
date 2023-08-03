@@ -15,7 +15,7 @@ class Converter2Pandas:
 
     def cb_convert_to_pandas(self, req: TriggerRequest) -> TriggerResponse:
         rospack = rospkg.RosPack()
-        yaml_path = rospack.get_path('leonardo_meshes')
+        yaml_path = rospack.get_path('aware_database')
         cost_map = rospy.get_param("/precompute_trees/cost_map")
 
         root = [row['root'] for row in cost_map]
@@ -32,7 +32,7 @@ class Converter2Pandas:
         df = pd.DataFrame(data=d)
 
         rospack = rospkg.RosPack()
-        config_path=rospack.get_path('leonardo_meshes') 
+        config_path=rospack.get_path('aware_database') 
         blade_info = rospy.get_param("/blade_info")
         file_name=config_path+"/config/results/"+blade_info['cloud_filename']
         pingInfoFilePath = os.path.join(file_name+'_costmap.ftr')
