@@ -26,7 +26,7 @@ bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
     double exploring_coef=10.0;
     if (!pnh.getParam("exploring_coef",exploring_coef))
     {
-        ROS_INFO("%s/exploring_coef is set to 5.0",pnh.getNamespace().c_str());
+        ROS_DEBUG("%s/exploring_coef is set to 5.0",pnh.getNamespace().c_str());
         exploring_coef=5.0;
     }
         std::string group_name = "manipulator";
@@ -57,7 +57,7 @@ bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
         {
             lb(idx) = bounds.min_position_;
             ub(idx) = bounds.max_position_;
-            ROS_INFO("joint %s has bounds = [%f,%f]",joint_names.at(idx).c_str(),lb(idx),ub(idx));
+            ROS_DEBUG("joint %s has bounds = [%f,%f]",joint_names.at(idx).c_str(),lb(idx),ub(idx));
         }
     }
 
@@ -140,7 +140,7 @@ bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
 
             if (!checker->check(q))
             {
-                ROS_FATAL("this should not happen");
+                ROS_FATAL("Root is in collision, this should not happen");
                 continue;
             }
 
@@ -191,7 +191,7 @@ bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
 
 
 
-            ROS_INFO("goal distance are in range [%f,%f]",ordered_goal.begin()->first,(--ordered_goal.end())->first);
+            ROS_DEBUG("goal distance are in range [%f,%f]",ordered_goal.begin()->first,(--ordered_goal.end())->first);
 
 
             for (const std::pair<double,std::tuple<std::string,Eigen::VectorXd,double*,int>>& p: ordered_goal)
@@ -202,7 +202,7 @@ bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
                 if (!ros::ok())
                     return 0;
 
-                ROS_INFO("Now considering from %s/%u to %s/%u (distance=%f)",tf_name.c_str(),isol,tf_name2.c_str(),isol_dest,p.first);
+                ROS_DEBUG("Now considering from %s/%u to %s/%u (distance=%f)",tf_name.c_str(),isol,tf_name2.c_str(),isol_dest,p.first);
 
 
                 XmlRpc::XmlRpcValue r;
@@ -216,7 +216,7 @@ bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
                         int is2=(int)r["goal_ik_number"];
                         if ( (r["root"]==tf_name2) && (r["goal"]==tf_name) && (is1==isol_dest) && (is2=isol))
                         {
-                            ROS_INFO("Using reverse cost");
+                            ROS_DEBUG("Using reverse cost");
                             r["root"]=tf_name;
                             r["goal"]=tf_name2;
                             r["root_ik_number"]=isol;
@@ -248,12 +248,12 @@ bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
                 if (sampler->getFociiDistance()>(*best_goal_from_tree_to_tree2)*exploring_coef)
                 {
                     ROS_DEBUG("%s/iksol%d null informed set.",tf_name.c_str(),isol);
-                    //ROS_INFO("   skipped due to collapsed informed set: from %s/%u to %s/%u",tf_name.c_str(),isol,tf_name2.c_str(),isol_dest);
+                    //ROS_DEBUG("   skipped due to collapsed informed set: from %s/%u to %s/%u",tf_name.c_str(),isol,tf_name2.c_str(),isol_dest);
                     break;
                 }
                 if (sampler->getFociiDistance()>exploring_coef*best_cost_from_this_goal)
                 {
-                    ROS_INFO("skipped because is too far: from %s/%u to %s/%u. %f/%f",tf_name.c_str(),isol,tf_name2.c_str(),isol_dest,p.first,sampler->getFociiDistance());
+                    ROS_DEBUG("skipped because is too far: from %s/%u to %s/%u. %f/%f",tf_name.c_str(),isol,tf_name2.c_str(),isol_dest,p.first,sampler->getFociiDistance());
 
                     break;;
                 }
@@ -278,7 +278,7 @@ bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
                 bool solved=solver.solved();
                 if (solved)
                 {
-                    ROS_INFO("direct connection");
+                    ROS_DEBUG("direct connection");
                     solution=solver.getSolution();
                     solution->setTree(tree);
                 }
@@ -291,7 +291,7 @@ bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
                 {
                     if (sampler->collapse())
                         break;
-                    ROS_INFO_THROTTLE(1,"computing tree from %s/%u to %s/%u, time=%f (max %f)",tf_name.c_str(),isol,tf_name2.c_str(),isol_dest,(ros::WallTime::now()-tsolver).toSec(),max_time);
+                    ROS_DEBUG_THROTTLE(1,"computing tree from %s/%u to %s/%u, time=%f (max %f)",tf_name.c_str(),isol,tf_name2.c_str(),isol_dest,(ros::WallTime::now()-tsolver).toSec(),max_time);
                     solver_iterations++;
                     if (solver.update(solution))
                     {
@@ -300,11 +300,11 @@ bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
                     }
 
                 }
-                ROS_INFO("computed tree from %s/%u to %s/%u in %f seconds (%d iterations, nodes=%d). solution %s",tf_name.c_str(),isol,tf_name2.c_str(),isol_dest,(ros::WallTime::now()-tsolver).toSec(), solver_iterations,(int)tree->getNumberOfNodes(), solved? "\033[1;32m found \033[0m": "\033[31m not found \033[0m");
+                ROS_DEBUG("computed tree from %s/%u to %s/%u in %f seconds (%d iterations, nodes=%d). solution %s",tf_name.c_str(),isol,tf_name2.c_str(),isol_dest,(ros::WallTime::now()-tsolver).toSec(), solver_iterations,(int)tree->getNumberOfNodes(), solved? "\033[1;32m found \033[0m": "\033[31m not found \033[0m");
                 if (solved)
                 {
                     sampler->setCost(std::min(solution->cost(),best_cost_from_this_goal));
-                    ROS_INFO("optimize path from %s/%u to %s/%u",tf_name.c_str(),isol,tf_name2.c_str(),isol_dest);
+                    ROS_DEBUG("optimize path from %s/%u to %s/%u",tf_name.c_str(),isol,tf_name2.c_str(),isol_dest);
                     solution->setTree(tree);
                     pathplan::PathLocalOptimizer path_opt(checker,metrics);
                     path_opt.setPath(solution);
@@ -315,14 +315,14 @@ bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
                         {
                             *best_goal_from_tree_to_tree2=solution->cost();
                             sampler->setCost(*best_goal_from_tree_to_tree2);
-                            ROS_INFO("improve best cost of tree %s->%s to %f",tf_name.c_str(),tf_name2.c_str(),*best_goal_from_tree_to_tree2);
+                            ROS_DEBUG("improve best cost of tree %s->%s to %f",tf_name.c_str(),tf_name2.c_str(),*best_goal_from_tree_to_tree2);
                         }
                     }
                 }
 
                 if (solved && (int)tree->getNumberOfNodes()<number_of_nodes)
                 {
-                    ROS_INFO("adding nodes to tree from %s/%u to %s/%u",tf_name.c_str(),isol,tf_name2.c_str(),isol_dest);
+                    ROS_DEBUG("adding nodes to tree from %s/%u to %s/%u",tf_name.c_str(),isol,tf_name2.c_str(),isol_dest);
 
 
                     pathplan::RRTStar rrtstar_solver(metrics,checker,sampler);
@@ -343,7 +343,7 @@ bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
                             solution->setTree(tree);
                             if (*best_goal_from_tree_to_tree2>solution->cost())
                             {
-                                ROS_INFO("improve best cost of tree %s->%s to %f",tf_name.c_str(),tf_name2.c_str(),*best_goal_from_tree_to_tree2);
+                                ROS_DEBUG("improve best cost of tree %s->%s to %f",tf_name.c_str(),tf_name2.c_str(),*best_goal_from_tree_to_tree2);
                                 *best_goal_from_tree_to_tree2=solution->cost();
                                 sampler->setCost(*best_goal_from_tree_to_tree2);
                             }
@@ -361,7 +361,7 @@ bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
 
                     //XmlRpc::XmlRpcValue path=solution->toXmlRpcValue();
                     //pnh.setParam(tree_name+"/path/"+tf_name2+"/iksol"+std::to_string(isol_dest),path);
-                    ROS_INFO("Solution from %s/iksol%d to %s/iksol%d, cost=%f",tf_name.c_str(),isol,tf_name2.c_str(),isol_dest,cost);
+                    ROS_DEBUG("Solution from %s/iksol%d to %s/iksol%d, cost=%f",tf_name.c_str(),isol,tf_name2.c_str(),isol_dest,cost);
                     XmlRpc::XmlRpcValue r;
                     r["root"]=tf_name;
                     r["goal"]=tf_name2;
@@ -376,7 +376,7 @@ bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
             std::string file_name=tree_name+".xml";
             std::replace( file_name.begin(), file_name.end(), '/', '-');
             tree->toXmlFile(file_name);
-            ROS_INFO("grown tree from ik_solution %d of %s in %f seconds, number of nodes %d",isol,tf_name.c_str(),(ros::WallTime::now()-t0).toSec(),tree->getNumberOfNodes());
+            ROS_DEBUG("grown tree from ik_solution %d of %s in %f seconds, number of nodes %d",isol,tf_name.c_str(),(ros::WallTime::now()-t0).toSec(),tree->getNumberOfNodes());
         }
     }
 

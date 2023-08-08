@@ -184,7 +184,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
     std::string s=node;
     s.erase(std::remove_if(std::begin(s), std::end(s), [](char ch) { return !std::isdigit(ch); }), s.end());
     int igroup=std::stoi(s);
-    ROS_INFO("node %s ik=%d, group=%d",node.c_str(),ik_sol,igroup);
+    ROS_DEBUG("node %s ik=%d, group=%d",node.c_str(),ik_sol,igroup);
 
     std::string tree_name="/goals/"+node+"/iksol"+std::to_string(ik_sol);
     std::vector<double> iksol;
@@ -238,7 +238,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
         order_pose_number.push_back(-10);
         tree->addNode(new_node);
         last_node=new_node;
-        ROS_INFO("connect with next keypoint");
+        ROS_DEBUG("connect with next keypoint");
       }
     }
 
@@ -269,7 +269,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
     }
 
 
-    ROS_INFO("processing %zu poses",ik_res.solutions.size());
+    ROS_DEBUG("processing %zu poses",ik_res.solutions.size());
 
 
 
@@ -341,7 +341,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
 
       if (!connected)
       {
-        ROS_INFO("Unreachable: Pose %zu of %zu (keypoint %s)",ip,ik_res.solutions.size(),node.c_str());
+        ROS_DEBUG("Unreachable: Pose %zu of %zu (keypoint %s)",ip,ik_res.solutions.size(),node.c_str());
 
         fail_poses.poses.push_back(ik_req.poses.poses.at(ip));
       }
@@ -359,7 +359,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
 
 
 
-    ROS_INFO("return to approach");
+    ROS_DEBUG("return to approach");
     if (checker->checkPath(last_node->getConfiguration(),approach))
     {
       last_q=approach;
