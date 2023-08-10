@@ -156,6 +156,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
   std::vector<int> order_pose_number;
 
   XmlRpc::XmlRpcValue configurations;
+  std::vector<int> configurations_number;
   int configurations_size=0;
 
   for (int inode=0;inode<travel.size();inode++)
@@ -353,6 +354,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
           tmp_conf[iax]=last_q(iax);
         }
         configurations[configurations_size]=tmp_conf;
+        configurations_number.push_back(pose_number.at(ip));
         configurations_size++;
       }
     }
@@ -411,6 +413,8 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
     pnh.setParam("/complete/path/cloud",xml_path);
     pnh.setParam("/complete/path/cloud_pose_number",order_pose_number);
     pnh.setParam("/complete/configurations",configurations);
+    pnh.setParam("/complete/configurations_number",configurations_number);
+
     res.success=true;
 
   }
