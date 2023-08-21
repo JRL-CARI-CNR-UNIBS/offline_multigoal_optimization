@@ -154,6 +154,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
 
   std::vector<pathplan::ConnectionPtr> connections;
   std::vector<int> order_pose_number;
+  order_pose_number.push_back(-10); //n connections have n+1 nodes
 
   XmlRpc::XmlRpcValue configurations;
   std::vector<int> configurations_number;
@@ -416,11 +417,12 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
     pnh.setParam("/complete/configurations_number",configurations_number);
 
     res.success=true;
-
   }
-  else{
-    ROS_ERROR("Connection size =0");
+  else
+  {
+    ROS_ERROR("Connection size = 0");
     res.success=false;
+    res.message="path has zero length";
   }
   return true;
 }
