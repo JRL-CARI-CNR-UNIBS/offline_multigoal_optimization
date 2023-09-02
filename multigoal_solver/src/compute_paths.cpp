@@ -398,12 +398,6 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
   }
   ROS_INFO("%s complete the task",pnh.getNamespace().c_str());
 
-  auto _order_pose_number = order_pose_number;
-  _order_pose_number.erase(std::remove(_order_pose_number.begin(), _order_pose_number.end(), -10), _order_pose_number.end());
-  std::sort(_order_pose_number.begin(), _order_pose_number.end());
-  const bool hasDuplicates = std::adjacent_find(_order_pose_number.begin(), _order_pose_number.end()) != _order_pose_number.end();
-  ROS_ERROR_COND(hasDuplicates, "\n\n\n **** DUPLICATES IN ORDERED POSE NUMBER ***** \n\n\n");
-
   if (connections.size()>0)
   {
     pathplan::Path path(connections,metrics,checker);
