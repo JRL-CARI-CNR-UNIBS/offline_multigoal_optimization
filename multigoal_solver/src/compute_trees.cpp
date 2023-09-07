@@ -59,7 +59,7 @@ bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
     {
       lb(idx) = bounds.min_position_;
       ub(idx) = bounds.max_position_;
-      ROS_DEBUG("joint %s has bounds = [%f,%f]", joint_names.at(idx).c_str(), lb(idx), ub(idx));
+      ROS_DEBUG("joint %s has bounds = [%f, %f]", joint_names.at(idx).c_str(), lb(idx), ub(idx));
     }
   }
 
