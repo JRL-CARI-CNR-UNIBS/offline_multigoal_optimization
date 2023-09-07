@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import os.path
+import os
 
 import rospy
 import pandas as pd
@@ -14,8 +14,8 @@ class Converter2Pandas:
         self.service = rospy.Service('/convert_to_pandas', Trigger, self.cb_convert_to_pandas)
 
     def cb_convert_to_pandas(self, req: TriggerRequest) -> TriggerResponse:
-        rospack = rospkg.RosPack()
-        yaml_path = rospack.get_path('aware_database')
+        aware_shared_database = os.environ['AWARE_CNR_DB']
+
         cost_map = rospy.get_param("/precompute_trees/cost_map")
 
         root = [row['root'] for row in cost_map]
@@ -31,10 +31,8 @@ class Converter2Pandas:
              'cost': cost}
         df = pd.DataFrame(data=d)
 
-        rospack = rospkg.RosPack()
-        config_path=rospack.get_path('aware_database') 
         blade_info = rospy.get_param("/blade_info")
-        file_name=config_path+"/config/results/"+blade_info['cloud_filename']
+        file_name= os.path.join(aware_shared_database, "config" , "results", blade_info['cloud_filename'])
         pingInfoFilePath = os.path.join(file_name+'_costmap.ftr')
         df.to_feather(pingInfoFilePath)
         print(df)

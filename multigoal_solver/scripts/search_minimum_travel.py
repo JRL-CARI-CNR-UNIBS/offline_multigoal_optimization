@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-import os.path
-
+import os
 import pandas as pd
 import random
 import rospy
@@ -17,14 +16,12 @@ class TravelOptimizer:
         self.nodes = []
 
     def optimze_path(self, req: TriggerRequest):
-        rospack = rospkg.RosPack()
-        yaml_path = rospack.get_path('aware_database')
+        
+        aware_shared_database = os.environ['AWARE_CNR_DB']
 
-        rospack = rospkg.RosPack()
-        config_path=rospack.get_path('aware_database')
         blade_info = rospy.get_param("/blade_info")
         tool_name = rospy.get_param("/tool_name")
-        file_name=config_path+"/config/results/"+blade_info['cloud_filename']
+        file_name = os.path.join(aware_shared_database, "config", "results", blade_info['cloud_filename'])
         pingInfoFilePath = os.path.join(file_name+'_costmap.ftr')
 
         cost_db = pd.read_feather(pingInfoFilePath, columns=None, use_threads=True)
@@ -76,8 +73,7 @@ class TravelOptimizer:
         rospy.set_param("/precompute_trees/travel", travel)
 
         blade_info = rospy.get_param("/blade_info")
-        file_name=yaml_path+"/config/results/"+blade_info['cloud_filename']
-
+        
         with open(os.path.join(file_name+'_'+tool_name+'_travel.yaml'), 'w') as file:
             documents = yaml.dump(travel, file)
 
