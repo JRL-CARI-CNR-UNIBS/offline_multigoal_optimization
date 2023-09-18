@@ -1,8 +1,14 @@
 <?xml version="1.0"?>
 
 <launch>
-<node pkg="multigoal_solver"  type="compute_paths" name="compute_paths" output="screen">
+<arg name="debug" default="false" />
+<arg name="output_stream" value="screen" if="$(arg debug)"/>
+<arg name="output_stream" value="log" unless="$(arg debug)"/>
+
+<node pkg="multigoal_solver"  type="compute_paths" name="compute_paths" output="$(arg output_stream)">
   <rosparam command="load" file="$(find multigoal_solver)/config/test.yaml" />
   <param name="tree_namespace" value="/precompute_trees"/>
 </node>
+
+
 </launch>
