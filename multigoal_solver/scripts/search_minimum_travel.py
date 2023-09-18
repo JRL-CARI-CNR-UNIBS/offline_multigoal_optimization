@@ -34,7 +34,7 @@ class TravelOptimizer:
         best_cost = float('inf')
         best_sequence = []
         for idx in range(100):
-            print("cycle ", idx)
+            #print("cycle ", idx)
             travel_cost, travel_sequence = self.genClosestFirstTravel(self.nodes, ik_number, cost_db, best_cost, best_sequence)
             if travel_cost < best_cost:
                 best_cost = travel_cost
@@ -65,21 +65,26 @@ class TravelOptimizer:
         print(best_sequence)
         print(best_cost)
         travel = list(best_sequence)
-
-        for idx in range(1, len(travel)):
-            print(f'- {travel[idx - 1]["node"]}/iksol{travel[idx - 1]["ik"]} ==> '
-                  f'{travel[idx]["node"]}/iksol{travel[idx]["ik"]}')
-
-        rospy.set_param("/precompute_trees/travel", travel)
-
-        blade_info = rospy.get_param("/blade_info")
         
-        with open(os.path.join(file_name+'_'+tool_name+'_travel.yaml'), 'w') as file:
-            documents = yaml.dump(travel, file)
-
         resp = TriggerResponse()
-        resp.success = True
-        resp.message = f'path saved at: '+file_name+'_'+tool_name+'_travel.yaml'
+        if len(travel):
+            for idx in range(1, len(travel)):
+                print(f'- {travel[idx - 1]["node"]}/iksol{travel[idx - 1]["ik"]} ==> '
+                    f'{travel[idx]["node"]}/iksol{travel[idx]["ik"]}')
+
+            rospy.set_param("/precompute_trees/travel", travel)
+
+            blade_info = rospy.get_param("/blade_info")
+            
+            with open(os.path.join(file_name+'_'+tool_name+'_travel.yaml'), 'w') as file:
+                documents = yaml.dump(travel, file)
+
+            resp.success = True
+            resp.message = f'path saved at: '+file_name+'_'+tool_name+'_travel.yaml'
+        else:
+            resp.success = False
+            resp.message = f'It was impossible to optimize the inspection ({file_name},{tool_name})'
+
         return resp
 
     def genClosestFirstTravel(self, random_nodes, ik_number, cost_db, best_cost=float('inf'), best_sequence=[]):
