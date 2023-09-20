@@ -340,37 +340,41 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
       }
     }
 
-    ROS_DEBUG("return to approach");
-    if (checker->checkPath(last_node->getConfiguration(), approach))
+    if (inode < travel.size()-1)
     {
-      last_q = approach;
-      new_node = std::make_shared<pathplan::Node>(approach);
-      pathplan::ConnectionPtr conn = std::make_shared<pathplan::Connection>(last_node, new_node);
-      conn->add();
-      connections.push_back(conn);
-      order_pose_number.push_back(-10);
-      tree->addNode(new_node);
-      last_node = new_node;
-    }
-    else
-    {
-      tree->changeRoot(last_node);
+      ROS_DEBUG("return to approach");
 
-      if (tree->connect(approach, new_node))
+      if (checker->checkPath(last_node->getConfiguration(), approach))
       {
         last_q = approach;
-
+        new_node = std::make_shared<pathplan::Node>(approach);
+        pathplan::ConnectionPtr conn = std::make_shared<pathplan::Connection>(last_node, new_node);
+        conn->add();
+        connections.push_back(conn);
+        order_pose_number.push_back(-10);
+        tree->addNode(new_node);
         last_node = new_node;
-        std::vector<pathplan::ConnectionPtr> tmp_connections = tree->getConnectionToNode(new_node);
-        for (size_t iconnection = 0; iconnection < tmp_connections.size(); iconnection++)
-        {
-          connections.push_back(tmp_connections.at(iconnection));
-          order_pose_number.push_back(-10);
-        }
       }
       else
       {
-        ROS_ERROR("Unable to come back to approach");
+        tree->changeRoot(last_node);
+
+        if (tree->connect(approach, new_node))
+        {
+          last_q = approach;
+
+          last_node = new_node;
+          std::vector<pathplan::ConnectionPtr> tmp_connections = tree->getConnectionToNode(new_node);
+          for (size_t iconnection = 0; iconnection < tmp_connections.size(); iconnection++)
+          {
+            connections.push_back(tmp_connections.at(iconnection));
+            order_pose_number.push_back(-10);
+          }
+        }
+        else
+        {
+          ROS_ERROR("Unable to come back to approach");
+        }
       }
     }
 
