@@ -357,6 +357,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
       }
       else
       {
+
         tree->changeRoot(last_node);
 
         if (tree->connect(approach, new_node))
@@ -373,8 +374,9 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
         }
         else
         {
-          ROS_ERROR("Unable to come back to approach");
+          ROS_WARN("Unable to come back to approach");
         }
+
       }
     }
 
