@@ -370,7 +370,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
       }
       else
       {
-        ROS_ERROR("Unable to come back to approach");
+        ROS_WARN("Unable to come back to approach");
       }
     }
 
