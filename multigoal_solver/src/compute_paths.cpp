@@ -159,7 +159,9 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
     std::string node = travel[inode]["node"];
     int ik_sol = (int)static_cast<double>(travel[inode]["ik"]);
 
-    if (!nh.getParam("/goals/" + node + "/joint_names", joint_names))
+
+    //if (!nh.getParam("/goals/" + node + "/joint_names", joint_names))
+    if (!nh.getParam("/" + tool_name + "_ik_solver/joint_names", joint_names))
     {
       ROS_WARN_STREAM("unable to read parameter /goals/" << node + "/joint_names");
       // res.success=false;
