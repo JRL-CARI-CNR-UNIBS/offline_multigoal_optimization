@@ -32,14 +32,15 @@ class Converter2Pandas:
         df = pd.DataFrame(data=d)
 
         blade_info = rospy.get_param("/blade_info")
+        tool_name = rospy.get_param("/tool_name")
         file_name= os.path.join(aware_shared_database, "config" , "results", blade_info['cloud_filename'])
-        pingInfoFilePath = os.path.join(file_name+'_costmap.ftr')
+        pingInfoFilePath = os.path.join(file_name+'_'+tool_name+'_costmap.ftr')
         df.to_feather(pingInfoFilePath)
         print(df)
 
         resp = TriggerResponse()
         resp.success = True
-        resp.message = f'Dtaframe saved in {pingInfoFilePath}'
+        resp.message = f'Costmap saved in {pingInfoFilePath}'
 
         return resp
 

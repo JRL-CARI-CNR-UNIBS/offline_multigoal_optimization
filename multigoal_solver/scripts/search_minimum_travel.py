@@ -22,7 +22,7 @@ class TravelOptimizer:
         blade_info = rospy.get_param("/blade_info")
         tool_name = rospy.get_param("/tool_name")
         file_name = os.path.join(aware_shared_database, "config", "results", blade_info['cloud_filename'])
-        pingInfoFilePath = os.path.join(file_name+'_costmap.ftr')
+        pingInfoFilePath = os.path.join(file_name+'_'+tool_name+'_costmap.ftr')
 
         cost_db = pd.read_feather(pingInfoFilePath, columns=None, use_threads=True)
 
@@ -34,7 +34,6 @@ class TravelOptimizer:
         best_cost = float('inf')
         best_sequence = []
         for idx in range(100):
-            #print("cycle ", idx)
             travel_cost, travel_sequence = self.genClosestFirstTravel(self.nodes, ik_number, cost_db, best_cost, best_sequence)
             if travel_cost < best_cost:
                 best_cost = travel_cost
@@ -50,7 +49,6 @@ class TravelOptimizer:
         filter_db = cost_db.loc[cost_db['cost'] < (best_cost - (min_cost * (len(self.nodes) - 2)))]
 
         for idx in range(10):
-            print("cycle ", idx)
             travel_cost, travel_sequence = self.genClosestFirstTravel(random_nodes=self.nodes,
                                                                       ik_number=ik_number,
                                                                       cost_db=filter_db,
