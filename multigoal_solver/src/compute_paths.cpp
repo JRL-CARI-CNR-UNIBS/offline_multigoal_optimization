@@ -242,11 +242,6 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
       }
     }
 
-    auto _pose_number = pose_number;
-    std::sort(_pose_number.begin(), _pose_number.end());
-    const bool hasDuplicates = std::adjacent_find(_pose_number.begin(), _pose_number.end()) != _pose_number.end();
-    ROS_ERROR_COND(hasDuplicates, "\n\n\n **** DUPLICATES IN POSE NUMBER ***** \n\n\n");
-
     if (!ik_client.call(ik_req, ik_res))
     {
       res.message = pnh.getNamespace() + " unable to call ik service";
