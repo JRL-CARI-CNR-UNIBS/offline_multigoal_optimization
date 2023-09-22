@@ -98,7 +98,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
   
   if (!ros::param::get("/" + tool_name + "_ik_solver/joint_names", joint_names))
   {
-    res.message =  "/" + tool_name + "_ik_solver/joint_names";
+    res.message =  "Unable to read the parameter /" + tool_name + "_ik_solver/joint_names";
     ROS_ERROR("%s", res.message.c_str());
     res.success = false;
     return true;

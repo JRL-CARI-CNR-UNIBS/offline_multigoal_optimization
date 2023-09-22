@@ -18,7 +18,6 @@
 
 bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
 {
-  ros::NodeHandle nh;
   ros::NodeHandle pnh("~");
   ros::NodeHandle solver_nh("~/solver");
 
@@ -74,7 +73,7 @@ bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
   q.setZero();
 
   int number_of_poi;
-  if (!nh.getParam("/goals/number_of_poi", number_of_poi))
+  if (!ros::param::get("/goals/number_of_poi", number_of_poi))
   {
     ROS_ERROR("/goals/number_of_poi is not defined");
     res.message = "/goals/number_of_poi is not defined";
@@ -83,7 +82,7 @@ bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
   }
 
   std::string node_prefix_name;
-  if (!nh.getParam("/goals/node_prefix_name", node_prefix_name))
+  if (!ros::param::get("/goals/node_prefix_name", node_prefix_name))
   {
     ROS_ERROR("/goals/node_prefix_name is not defined");
     res.message = "/goals/node_prefix_name is not defined";
@@ -128,7 +127,7 @@ bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
     int number_ik;
     if (!ros::param::get("/goals/" + tf_name + "/number_of_ik", number_ik))
     {
-      ROS_WARN_STREAM("unable to read parameter /goals/" << tf_name + "/joint_names (" << i << "/" << tf_list.size()
+      ROS_WARN_STREAM("unable to read parameter /goals/" << tf_name + "/number_of_ik (" << i << "/" << tf_list.size()
                                                          << ")");
       continue;
     }
@@ -138,7 +137,7 @@ bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
       std::string tree_name = "/goals/" + tf_name + "/iksol" + std::to_string(isol);
       std::vector<double> iksol;
 
-      if (!nh.getParam(tree_name + "/root", iksol))
+      if (!ros::param::get(tree_name + "/root", iksol))
       {
         ROS_ERROR_STREAM("unable to read parameter " << tree_name + "/root");
         res.message = "Unable to read parameter '" + tree_name + "/root' is not defined";
@@ -176,9 +175,9 @@ bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
         }
 
         int number_ik2;
-        if (!nh.getParam("/goals/" + tf_name2 + "/number_of_ik", number_ik2))
+        if (!ros::param::get("/goals/" + tf_name2 + "/number_of_ik", number_ik2))
         {
-          ROS_WARN_STREAM("unable to read parameter /goals/" << tf_name + "/joint_names");
+          ROS_WARN_STREAM("unable to read parameter /goals/" << tf_name + "/number_of_ik");
           continue;
           //                    ROS_ERROR_STREAM("unable to read parameter "<< "/goals/"+tf_name2+"/number_of_ik");
           //                    return 0;
@@ -187,7 +186,7 @@ bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
         for (int isol2 = 0; isol2 < number_ik2; isol2++)
         {
           std::string tree_name2 = "/goals/" + tf_name2 + "/iksol" + std::to_string(isol2);
-          if (!nh.getParam(tree_name2 + "/root", iksol))
+          if (!ros::param::get(tree_name2 + "/root", iksol))
           {
             ROS_ERROR_STREAM("unable to read parameter " << tree_name2 + "/root");
             res.message = "Unable to read parameter '" + tree_name2 + "/root' is not defined";
