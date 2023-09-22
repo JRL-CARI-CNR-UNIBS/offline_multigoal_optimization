@@ -95,6 +95,15 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
   else
     ik_client = nh.serviceClient<ik_solver_msgs::GetIkArray>("/" + tool_name + "_ik_solver/get_ik_array");
 
+  
+  if (!ros::param::get("/" + tool_name + "_ik_solver/joint_names", joint_names))
+  {
+    res.message =  "/" + tool_name + "_ik_solver/joint_names";
+    ROS_ERROR("%s", res.message.c_str());
+    res.success = false;
+    return true;
+  }
+  
   ros::Publisher failed_poses_pub = nh.advertise<geometry_msgs::PoseArray>("fail_poses", 10, true);
 
   ROS_INFO("%s is waiting for the point cloud", pnh.getNamespace().c_str());
@@ -158,16 +167,6 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
   {
     std::string node = travel[inode]["node"];
     int ik_sol = (int)static_cast<double>(travel[inode]["ik"]);
-
-
-    //if (!nh.getParam("/goals/" + node + "/joint_names", joint_names))
-    if (!nh.getParam("/" + tool_name + "_ik_solver/joint_names", joint_names))
-    {
-      ROS_WARN_STREAM("unable to read parameter /goals/" << node + "/joint_names");
-      // res.success=false;
-      // return true;
-      continue;
-    }
 
     ik_solver_msgs::GetIkArrayRequest ik_req;
     ik_solver_msgs::GetIkArrayResponse ik_res;

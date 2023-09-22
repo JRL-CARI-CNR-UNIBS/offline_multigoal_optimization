@@ -126,7 +126,7 @@ bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
     double& best_cost_from_this_goal = best_cost_from_goal.at(tf_name);
 
     int number_ik;
-    if (!nh.getParam("/goals/" + tf_name + "/number_of_ik", number_ik))
+    if (!ros::param::get("/goals/" + tf_name + "/number_of_ik", number_ik))
     {
       ROS_WARN_STREAM("unable to read parameter /goals/" << tf_name + "/joint_names (" << i << "/" << tf_list.size()
                                                          << ")");
