@@ -16,6 +16,8 @@
 #include <ik_solver_msgs/GetIkArray.h>
 #include <std_srvs/Trigger.h>
 #include <moveit_msgs/GetPlanningScene.h>
+#include <graph_core/solvers/path_solver.h>
+#include <graph_core/graph/subtree.h>
 
 void pointCloudCb(const sensor_msgs::PointCloud2ConstPtr& msg, sensor_msgs::PointCloud2Ptr& pc)
 {
@@ -225,6 +227,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
         new_node = std::make_shared<pathplan::Node>(approach);
         pathplan::ConnectionPtr conn = std::make_shared<pathplan::Connection>(last_node, new_node);
         conn->add();
+        conn->setCost(metrics->cost(last_node->getConfiguration(), approach));
         connections.push_back(conn);
         order_pose_number.push_back(-10);
         tree->addNode(new_node);
@@ -283,9 +286,11 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
             new_node = std::make_shared<pathplan::Node>(p.second);
             pathplan::ConnectionPtr conn = std::make_shared<pathplan::Connection>(last_node, new_node);
             conn->add();
+            conn->setCost(metrics->cost(last_node->getConfiguration(), p.second));
             connections.push_back(conn);
             order_pose_number.push_back(pose_number.at(ip));
             tree->addNode(new_node);
+
             last_node = new_node;
             break;
           }
@@ -294,18 +299,33 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
       if (!connected)
       {
         ROS_DEBUG("Pose %zu of %zu (keypoint %s): Try connect", ip, ik_res.solutions.size(), node.c_str());
-        tree->changeRoot(last_node);
+        pathplan::Subtree subtree(tree,last_node);
+
+        //if (!tree->changeRoot(last_node))
+//          ROS_ERROR("the new root is not in the tree");
+
 
         for (const std::pair<double, Eigen::VectorXd>& p : ordered_configurations)
         {
-          if (tree->connect(p.second, new_node))
+          if (subtree.connect(p.second, new_node))
           {
             last_q = p.second;
             connected = true;
 
             first_time = false;
+            std::vector<pathplan::ConnectionPtr> tmp_connections = subtree.getConnectionToNode(new_node);
+
+            pathplan::PathPtr solution=std::make_shared<pathplan::Path>(tmp_connections,metrics,checker);
+            solution->setTree(tree);
+
+            pathplan::PathLocalOptimizer path_opt(checker, metrics);
+            path_opt.setPath(solution);
+            path_opt.solve(solution,100000);
+            tmp_connections=solution->getConnections();
+
+
             last_node = new_node;
-            std::vector<pathplan::ConnectionPtr> tmp_connections = tree->getConnectionToNode(new_node);
+
             for (size_t iconnection = 0; iconnection < tmp_connections.size(); iconnection++)
             {
               connections.push_back(tmp_connections.at(iconnection));
@@ -346,6 +366,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
         new_node = std::make_shared<pathplan::Node>(approach);
         pathplan::ConnectionPtr conn = std::make_shared<pathplan::Connection>(last_node, new_node);
         conn->add();
+        conn->setCost(metrics->cost(last_node->getConfiguration(), approach));
         connections.push_back(conn);
         order_pose_number.push_back(-10);
         tree->addNode(new_node);
