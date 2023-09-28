@@ -43,7 +43,7 @@ class TravelOptimizer:
 
         cost_db = pd.read_feather(pingInfoFilePath, columns=None, use_threads=True)
         cost_db = self.symmetric_entries(cost_db)
-        
+
         self.nodes = list(cost_db.root.unique())
         ik_number = {}
         for n in self.nodes:

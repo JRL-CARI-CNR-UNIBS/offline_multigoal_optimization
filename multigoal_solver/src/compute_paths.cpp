@@ -70,6 +70,8 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
   double steps = pnh.param("collision_steps", 0.01);
   double maximum_distance = pnh.param("maximum_distance", 0.01);
 
+  bool enable_approach = pnh.param("enable_approach", true);
+
   pathplan::CollisionCheckerPtr checker =
       std::make_shared<pathplan::MoveitCollisionChecker>(planning_scene, group_name, maximum_distance);
   checker->setPlanningSceneMsg(ps_srv.response.scene);
@@ -84,6 +86,8 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
     res.success = false;
     return true;
   }
+
+
 
   sensor_msgs::PointCloud2Ptr pc;
 
@@ -352,7 +356,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
       }
     }
 
-    if (inode < travel.size()-1)
+    if ((inode < travel.size()-1) && enable_approach)
     {
       ROS_DEBUG("return to approach");
 
