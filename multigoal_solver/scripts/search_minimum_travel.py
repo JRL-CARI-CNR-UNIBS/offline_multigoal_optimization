@@ -15,6 +15,23 @@ class TravelOptimizer:
         self.service = rospy.Service('/optimize_path', Trigger, self.optimze_path)
         self.nodes = []
 
+    # make dataframe symmetrical (if there is a connetion nodeX/ikY->nodeZ/ikW, then add  connetion nodeZ/ikW->nodeX/ikY
+    def symmetric_entries(self,cost_db: pd.DataFrame):
+
+        new_cost_db = cost_db.copy()
+        for index, row in cost_db.iterrows():
+            print(f"{row['root']}: {row['root_ik_number']} -> {row['goal']}: {row['goal_ik_number']}  cost: {row['cost']}")
+            tmp = cost_db.loc[(cost_db['root'] == row['goal']) & (cost_db['root_ik_number']==row['goal_ik_number']) &
+                              (cost_db['goal'] == row['root']) & (cost_db['goal_ik_number'] == row['root_ik_number'])]
+            if (tmp.empty):
+                new_row={'root': row['goal'],
+                         'root_ik_number': row['goal_ik_number'],
+                         'goal': row['root'],
+                         'goal_ik_number': row['root_ik_number'],
+                         'cost': row['cost']}
+                new_cost_db = new_cost_db.append(new_row, ignore_index = True)
+        return new_cost_db
+
     def optimze_path(self, req: TriggerRequest):
         
         aware_shared_database = os.environ['AWARE_CNR_DB']
@@ -25,7 +42,8 @@ class TravelOptimizer:
         pingInfoFilePath = os.path.join(file_name+'_'+tool_name+'_costmap.ftr')
 
         cost_db = pd.read_feather(pingInfoFilePath, columns=None, use_threads=True)
-
+        cost_db = self.symmetric_entries(cost_db)
+        
         self.nodes = list(cost_db.root.unique())
         ik_number = {}
         for n in self.nodes:
@@ -34,7 +52,9 @@ class TravelOptimizer:
         best_cost = float('inf')
         best_sequence = []
         for idx in range(100):
-            travel_cost, travel_sequence = self.genClosestFirstTravel(self.nodes, ik_number, cost_db, best_cost, best_sequence)
+            # for the first iteration try sorted node sequence, then try random node sequence
+            travel_cost, travel_sequence = self.genClosestFirstTravel(self.nodes, ik_number, cost_db, best_cost,
+                                                                      best_sequence, idx > 10)
             if travel_cost < best_cost:
                 best_cost = travel_cost
                 best_sequence = travel_sequence
@@ -85,9 +105,12 @@ class TravelOptimizer:
 
         return resp
 
-    def genClosestFirstTravel(self, random_nodes, ik_number, cost_db, best_cost=float('inf'), best_sequence=[]):
+    def genClosestFirstTravel(self, random_nodes, ik_number, cost_db, best_cost=float('inf'), best_sequence=[], shuffle = True):
 
-        random.shuffle(random_nodes)
+        if shuffle:  # shuffle solution
+            random.shuffle(random_nodes)
+        else:  # try with alphabetical order
+            random_nodes = sorted(random_nodes)
 
         # explored_nodes = [[]]
         for start in random_nodes:
@@ -121,7 +144,7 @@ class TravelOptimizer:
 
                     if total_cost > best_cost:  # abort this solution because is worst than the best one
                         break
-                    sequence[i] = {'node': next, 'ik': float(next_ik)}
+                    sequence[i+1] = {'node': next, 'ik': float(next_ik)}
 
                     start = next
                     start_ik = next_ik
