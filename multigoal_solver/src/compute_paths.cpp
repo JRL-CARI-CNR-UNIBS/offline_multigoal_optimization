@@ -107,7 +107,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
   else
   {
     ik_client = nh.serviceClient<ik_solver_msgs::GetIkArray>("/" + tool_name + "_ik_solver/get_ik_array");
-    bound_client = nh.serviceClient<ik_solver_msgs::GetBound>("/" + tool_name + "ik_solver/get_bounds");
+    bound_client = nh.serviceClient<ik_solver_msgs::GetBound>("/" + tool_name + "_ik_solver/get_bounds");
   }
 
   if (!bound_client.waitForExistence(ros::Duration(20)))
@@ -120,7 +120,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
 
   ik_solver_msgs::GetBoundRequest bound_req;
   ik_solver_msgs::GetBoundResponse bound_res;
-  if (bound_client.call(bound_req,bound_res))
+  if (!bound_client.call(bound_req,bound_res))
   {
 
     res.message =  "Unable to call service " + bound_client.getService();
@@ -133,13 +133,12 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
   Eigen::VectorXd lb(joint_names.size());
   Eigen::VectorXd ub(joint_names.size());
 
-  ROS_FATAL_STREAM("Bounds\n"<<bound_res);
   for (size_t iax=0; iax < bound_res.joint_names.size(); iax++)
   {
     lb(iax)=bound_res.lower_bound.at(iax);
     ub(iax)=bound_res.upper_bound.at(iax);
   }
-  
+
   ros::Publisher failed_poses_pub = nh.advertise<geometry_msgs::PoseArray>("fail_poses", 10, true);
 
   ROS_INFO("%s is waiting for the point cloud", pnh.getNamespace().c_str());
@@ -268,6 +267,42 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
         last_node = new_node;
         ROS_DEBUG("connect with next keypoint");
       }
+      else
+      {
+        pathplan::SubtreePtr subtree=std::make_shared<pathplan::Subtree>(tree,last_node);
+        pathplan::InformedSamplerPtr sampler=std::make_shared<pathplan::InformedSampler>(last_node->getConfiguration(),
+                                                                                         approach,
+                                                                                         lb,
+                                                                                         ub);
+
+
+        pathplan::RRT solver(metrics,checker,sampler);
+        solver.config(solver_nh);
+        solver.addStartTree(subtree);
+
+        pathplan::NodePtr g = std::make_shared<pathplan::Node>(approach);
+        solver.addGoal(g);
+        pathplan::PathPtr solution;
+
+        if (solver.solve(solution))
+        {
+          last_q = approach;
+          last_node = g;
+          solution->setTree(tree);
+
+          pathplan::PathLocalOptimizer path_opt(checker, metrics);
+          path_opt.setPath(solution);
+          path_opt.solve(solution,100000);
+          std::vector<pathplan::ConnectionPtr> tmp_connections=solution->getConnections();
+
+
+          for (size_t iconnection = 0; iconnection < tmp_connections.size(); iconnection++)
+          {
+            connections.push_back(tmp_connections.at(iconnection));
+            order_pose_number.push_back(-10);
+          }
+        }
+      }
     }
 
     std::vector<int> pose_number;
@@ -300,7 +335,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
       for (ik_solver_msgs::Configuration& c : ik.configurations)
       {
         q = Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(c.configuration.data(), c.configuration.size());
-        // double dist=(q-last_q).norm();
+
         if (checker->check(q))
         {
           double dist = std::sqrt(q.transpose() * weight * q);
@@ -337,10 +372,12 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
 
         for (const std::pair<double, Eigen::VectorXd>& p : ordered_configurations)
         {
+
           pathplan::InformedSamplerPtr sampler=std::make_shared<pathplan::InformedSampler>(last_node->getConfiguration(),
                                                                                            p.second,
                                                                                            lb,
                                                                                            ub);
+
 
           pathplan::RRT solver(metrics,checker,sampler);
           solver.config(solver_nh);
@@ -349,6 +386,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
           pathplan::NodePtr g = std::make_shared<pathplan::Node>(p.second);
           solver.addGoal(g);
           pathplan::PathPtr solution;
+
           if (solver.solve(solution))
           {
             last_q = p.second;
@@ -362,15 +400,13 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
             path_opt.solve(solution,100000);
             std::vector<pathplan::ConnectionPtr> tmp_connections=solution->getConnections();
 
-
-            last_node = new_node;
+            last_node = g;
 
             for (size_t iconnection = 0; iconnection < tmp_connections.size(); iconnection++)
             {
               connections.push_back(tmp_connections.at(iconnection));
               order_pose_number.push_back(pose_number.at(ip));
             }
-
             break;
           }
         }
@@ -430,7 +466,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
         {
           last_q = approach;
 
-          last_node = new_node;
+          last_node = g;
           solution->setTree(tree);
 
           pathplan::PathLocalOptimizer path_opt(checker, metrics);
@@ -455,8 +491,8 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
     failed_poses_pub.publish(fail_poses);
   }
   ROS_INFO("[%s] complete the task", pnh.getNamespace().c_str());
-  ROS_INFO("[%s] order_pose_number %u", pnh.getNamespace().c_str(), order_pose_number.size());
-  ROS_INFO("[%s] configurations_number %u", pnh.getNamespace().c_str(), configurations_number.size());
+  ROS_INFO("[%s] order_pose_number %zu", pnh.getNamespace().c_str(), order_pose_number.size());
+  ROS_INFO("[%s] configurations_number %zu", pnh.getNamespace().c_str(), configurations_number.size());
 
   if (connections.size() > 0)
   {
