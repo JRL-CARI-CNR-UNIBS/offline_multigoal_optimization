@@ -4,8 +4,11 @@
 #include <graph_core/parallel_moveit_collision_checker.h>
 #include <graph_core/sampler.h>
 #include <graph_core/metrics.h>
-#include <graph_core/solvers/rrt.h>
+#include <graph_core/solvers/path_solver.h>
 #include <graph_core/graph/tree.h>
+#include <graph_core/graph/subtree.h>
+#include <graph_core/solvers/rrt.h>
+#include <graph_core/solvers/multigoal.h>
 #include <moveit/planning_scene/planning_scene.h>
 #include <moveit/planning_interface/planning_interface.h>
 #include <moveit/move_group_interface/move_group_interface.h>
@@ -17,8 +20,6 @@
 #include <ik_solver_msgs/GetBound.h>
 #include <std_srvs/Trigger.h>
 #include <moveit_msgs/GetPlanningScene.h>
-#include <graph_core/solvers/path_solver.h>
-#include <graph_core/graph/subtree.h>
 
 void pointCloudCb(const sensor_msgs::PointCloud2ConstPtr& msg, sensor_msgs::PointCloud2Ptr& pc)
 {
@@ -276,7 +277,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
                                                                                          ub);
 
 
-        pathplan::RRT solver(metrics,checker,sampler);
+        pathplan::MultigoalSolver solver(metrics,checker,sampler);
         solver.config(solver_nh);
         solver.addStartTree(subtree);
 
@@ -379,7 +380,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
                                                                                            ub);
 
 
-          pathplan::RRT solver(metrics,checker,sampler);
+          pathplan::MultigoalSolver solver(metrics,checker,sampler);
           solver.config(solver_nh);
           solver.addStartTree(subtree);
 
@@ -456,7 +457,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
                                                                                          lb,
                                                                                          ub);
 
-        pathplan::RRT solver(metrics,checker,sampler);
+        pathplan::MultigoalSolver solver(metrics,checker,sampler);
         solver.config(solver_nh);
 
         pathplan::NodePtr g = std::make_shared<pathplan::Node>(new_node->getConfiguration());
