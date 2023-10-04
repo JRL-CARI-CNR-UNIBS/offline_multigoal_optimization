@@ -454,7 +454,9 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
 
     failed_poses_pub.publish(fail_poses);
   }
-  ROS_INFO("%s complete the task", pnh.getNamespace().c_str());
+  ROS_INFO("[%s] complete the task", pnh.getNamespace().c_str());
+  ROS_INFO("[%s] order_pose_number %u", pnh.getNamespace().c_str(), order_pose_number.size());
+  ROS_INFO("[%s] configurations_number %u", pnh.getNamespace().c_str(), configurations_number.size());
 
   if (connections.size() > 0)
   {

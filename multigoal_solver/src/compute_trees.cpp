@@ -408,7 +408,6 @@ bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
   }
   else
   {
-    ROS_ERROR("%s Task Failed", pnh.getNamespace().c_str());
     res.message = pnh.getNamespace() + ": Task Failed";
     res.success = false;
   }
