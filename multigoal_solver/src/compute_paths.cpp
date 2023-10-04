@@ -10,10 +10,11 @@
 #include <moveit/planning_interface/planning_interface.h>
 #include <moveit/move_group_interface/move_group_interface.h>
 #include <moveit/robot_model_loader/robot_model_loader.h>
-#include <ik_solver_msgs/GetIk.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <geometry_msgs/PoseArray.h>
+#include <ik_solver_msgs/GetIk.h>
 #include <ik_solver_msgs/GetIkArray.h>
+#include <ik_solver_msgs/GetBound.h>
 #include <std_srvs/Trigger.h>
 #include <moveit_msgs/GetPlanningScene.h>
 #include <graph_core/solvers/path_solver.h>
@@ -29,6 +30,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
   ros::NodeHandle nh;
   ros::NodeHandle pnh("~");
   ros::NodeHandle solver_nh("~/solver");
+
 
   std::string group_name = "manipulator";
   if (!pnh.getParam("group_name", group_name))
@@ -96,18 +98,46 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
 
   std::string tool_name;
   ros::ServiceClient ik_client;
+  ros::ServiceClient bound_client;
   if (!nh.getParam("/tool_name", tool_name))
-    ik_client = nh.serviceClient<ik_solver_msgs::GetIkArray>("/ik_solver/get_ik_array");
-  else
-    ik_client = nh.serviceClient<ik_solver_msgs::GetIkArray>("/" + tool_name + "_ik_solver/get_ik_array");
-
-  
-  if (!ros::param::get("/" + tool_name + "_ik_solver/joint_names", joint_names))
   {
-    res.message =  "Unable to read the parameter /" + tool_name + "_ik_solver/joint_names";
+    ik_client = nh.serviceClient<ik_solver_msgs::GetIkArray>("/ik_solver/get_ik_array");
+    bound_client = nh.serviceClient<ik_solver_msgs::GetBound>("ik_solver/get_bounds");
+  }
+  else
+  {
+    ik_client = nh.serviceClient<ik_solver_msgs::GetIkArray>("/" + tool_name + "_ik_solver/get_ik_array");
+    bound_client = nh.serviceClient<ik_solver_msgs::GetBound>("/" + tool_name + "ik_solver/get_bounds");
+  }
+
+  if (!bound_client.waitForExistence(ros::Duration(20)))
+  {
+    res.message =  "Timeout on server " + bound_client.getService();
     ROS_ERROR("%s", res.message.c_str());
     res.success = false;
     return true;
+  }
+
+  ik_solver_msgs::GetBoundRequest bound_req;
+  ik_solver_msgs::GetBoundResponse bound_res;
+  if (bound_client.call(bound_req,bound_res))
+  {
+
+    res.message =  "Unable to call service " + bound_client.getService();
+    ROS_ERROR("%s", res.message.c_str());
+    res.success = false;
+    return true;
+  }
+
+  joint_names=bound_res.joint_names;
+  Eigen::VectorXd lb(joint_names.size());
+  Eigen::VectorXd ub(joint_names.size());
+
+  ROS_FATAL_STREAM("Bounds\n"<<bound_res);
+  for (size_t iax=0; iax < bound_res.joint_names.size(); iax++)
+  {
+    lb(iax)=bound_res.lower_bound.at(iax);
+    ub(iax)=bound_res.upper_bound.at(iax);
   }
   
   ros::Publisher failed_poses_pub = nh.advertise<geometry_msgs::PoseArray>("fail_poses", 10, true);
@@ -303,25 +333,34 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
       if (!connected)
       {
         ROS_DEBUG("Pose %zu of %zu (keypoint %s): Try connect", ip, ik_res.solutions.size(), node.c_str());
-        pathplan::Subtree subtree(tree,last_node);
+        pathplan::SubtreePtr subtree=std::make_shared<pathplan::Subtree>(tree,last_node);
 
         for (const std::pair<double, Eigen::VectorXd>& p : ordered_configurations)
         {
-          if (subtree.connect(p.second, new_node))
+          pathplan::InformedSamplerPtr sampler=std::make_shared<pathplan::InformedSampler>(last_node->getConfiguration(),
+                                                                                           p.second,
+                                                                                           lb,
+                                                                                           ub);
+
+          pathplan::RRT solver(metrics,checker,sampler);
+          solver.config(solver_nh);
+          solver.addStartTree(subtree);
+
+          pathplan::NodePtr g = std::make_shared<pathplan::Node>(p.second);
+          solver.addGoal(g);
+          pathplan::PathPtr solution;
+          if (solver.solve(solution))
           {
             last_q = p.second;
             connected = true;
 
             first_time = false;
-            std::vector<pathplan::ConnectionPtr> tmp_connections = subtree.getConnectionToNode(new_node);
-
-            pathplan::PathPtr solution=std::make_shared<pathplan::Path>(tmp_connections,metrics,checker);
             solution->setTree(tree);
 
             pathplan::PathLocalOptimizer path_opt(checker, metrics);
             path_opt.setPath(solution);
             path_opt.solve(solution,100000);
-            tmp_connections=solution->getConnections();
+            std::vector<pathplan::ConnectionPtr> tmp_connections=solution->getConnections();
 
 
             last_node = new_node;
@@ -375,22 +414,29 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
       else
       {
 
-        pathplan::Subtree subtree(tree,last_node);
+        pathplan::SubtreePtr subtree=std::make_shared<pathplan::Subtree>(tree,last_node);
+        pathplan::InformedSamplerPtr sampler=std::make_shared<pathplan::InformedSampler>(last_node->getConfiguration(),
+                                                                                         new_node->getConfiguration(),
+                                                                                         lb,
+                                                                                         ub);
 
-        if (subtree.connect(approach, new_node))
+        pathplan::RRT solver(metrics,checker,sampler);
+        solver.config(solver_nh);
+
+        pathplan::NodePtr g = std::make_shared<pathplan::Node>(new_node->getConfiguration());
+        solver.addGoal(g);
+        pathplan::PathPtr solution;
+        if (solver.solve(solution))
         {
           last_q = approach;
 
           last_node = new_node;
-          std::vector<pathplan::ConnectionPtr> tmp_connections = subtree.getConnectionToNode(new_node);
-
-          pathplan::PathPtr solution=std::make_shared<pathplan::Path>(tmp_connections,metrics,checker);
           solution->setTree(tree);
 
           pathplan::PathLocalOptimizer path_opt(checker, metrics);
           path_opt.setPath(solution);
           path_opt.solve(solution,100000);
-          tmp_connections=solution->getConnections();
+          std::vector<pathplan::ConnectionPtr> tmp_connections=solution->getConnections();
 
           for (size_t iconnection = 0; iconnection < tmp_connections.size(); iconnection++)
           {
