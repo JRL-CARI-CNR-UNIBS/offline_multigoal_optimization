@@ -141,7 +141,8 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
   }
 
   ros::Publisher failed_poses_pub = nh.advertise<geometry_msgs::PoseArray>("fail_poses", 10, true);
-  ros::Publisher no_feasible_ik_poses = nh.advertise<geometry_msgs::PoseArray>("no_feasible_ik_poses", 10, true);
+  ros::Publisher no_feasible_ik_poses_pub = nh.advertise<geometry_msgs::PoseArray>("no_feasible_ik_poses", 10, true);
+  ros::Publisher no_ik_poses_pub = nh.advertise<geometry_msgs::PoseArray>("no_ik_poses", 10, true);
 
   ROS_INFO("%s is waiting for the point cloud", pnh.getNamespace().c_str());
 
@@ -184,6 +185,9 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
   Eigen::VectorXd last_q;
   geometry_msgs::PoseArray fail_poses;
   fail_poses.header.frame_id = pc->header.frame_id;
+
+  geometry_msgs::PoseArray no_feasible_ik_poses;
+  no_feasible_ik_poses.header.frame_id = pc->header.frame_id;
 
   geometry_msgs::PoseArray no_ik_poses;
   no_ik_poses.header.frame_id = pc->header.frame_id;
@@ -336,6 +340,12 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
       ik_solver_msgs::IkSolution& ik = ik_res.solutions.at(ip);
       bool connected = false;
 
+      if (ik.configurations.empty())
+      {
+        ROS_DEBUG("Unreachable: Pose %zu of %zu (keypoint %s) has no ik (feasible or unfeasible)", ip, ik_res.solutions.size(), node.c_str());
+
+        no_ik_poses.poses.push_back(ik_req.poses.poses.at(ip));
+      }
 
       std::multimap<double, Eigen::VectorXd> ordered_configurations;
       for (ik_solver_msgs::Configuration& c : ik.configurations)
@@ -353,7 +363,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
       {
         ROS_DEBUG("Unreachable: Pose %zu of %zu (keypoint %s) has no feasible ik", ip, ik_res.solutions.size(), node.c_str());
 
-        no_ik_poses.poses.push_back(ik_req.poses.poses.at(ip));
+        no_feasible_ik_poses.poses.push_back(ik_req.poses.poses.at(ip));
       }
       if (!first_time)
       {
@@ -501,7 +511,8 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
     }
 
     failed_poses_pub.publish(fail_poses);
-    no_feasible_ik_poses.publish(no_ik_poses);
+    no_feasible_ik_poses_pub.publish(no_feasible_ik_poses);
+    no_ik_poses_pub.publish(no_ik_poses);
   }
   ROS_INFO("[%s] complete the task", pnh.getNamespace().c_str());
   ROS_INFO("[%s] order_pose_number %zu", pnh.getNamespace().c_str(), order_pose_number.size());
