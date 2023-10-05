@@ -177,7 +177,7 @@ bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
         int number_ik2;
         if (!ros::param::get("/goals/" + tf_name2 + "/number_of_ik", number_ik2))
         {
-          ROS_WARN_STREAM("unable to read parameter /goals/" << tf_name << "/number_of_ik (analyzing ik solution # " << isol << " out of " << number_ik << " of " << tf_name <<"  )");
+          ROS_WARN_STREAM("unable to read parameter /goals/" << tf_name2 << "/number_of_ik (analyzing ik solution # " << isol << " out of " << number_ik << " of " << tf_name <<"  )");
           continue;
           //                    ROS_ERROR_STREAM("unable to read parameter "<< "/goals/"+tf_name2+"/number_of_ik");
           //                    return 0;
