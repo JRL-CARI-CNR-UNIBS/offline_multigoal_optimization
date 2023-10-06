@@ -118,17 +118,59 @@ bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
   XmlRpc::XmlRpcValue result;
   int idx_result = 0;
 
+  std::map<std::string, int> number_ik_per_tf;
+  std::map<std::string, std::vector< std::vector<double > > > root_ik_per_tf;
   for (size_t i = 0; i < tf_list.size(); i++)
   {
     const std::string& tf_name = tf_list.at(i);
     best_cost_from_goal.insert(std::pair<std::string, double>(tf_name, std::numeric_limits<double>::infinity()));
     double& best_cost_from_this_goal = best_cost_from_goal.at(tf_name);
 
-    int number_ik;
+    int number_ik = 0;
     if (!ros::param::get("/goals/" + tf_name + "/number_of_ik", number_ik))
     {
       ROS_WARN_STREAM("unable to read parameter /goals/" << tf_name + "/number_of_ik (" << i+1 << "th out of " << tf_list.size()
                                                          << ")");
+      number_ik = 0;
+    }
+    number_ik_per_tf[tf_name] = number_ik;
+    
+    root_ik_per_tf[tf_name] = {{}};
+    for (int isol = 0; isol < number_ik; isol++)
+    {
+      std::string tree_name = "/goals/" + tf_name + "/iksol" + std::to_string(isol);
+      std::vector<double> iksol;
+
+      if (!ros::param::get(tree_name + "/root", iksol))
+      {
+        ROS_ERROR_STREAM("unable to read parameter " << tree_name + "/root");
+        res.message = "Unable to read parameter '" + tree_name + "/root' is not defined";
+        res.success = false;
+        return true;
+      }
+      root_ik_per_tf[tf_name].push_back(iksol);
+    }
+  }
+  
+
+
+
+  for (size_t i = 0; i < tf_list.size(); i++)
+  {
+    const std::string& tf_name = tf_list.at(i);
+    best_cost_from_goal.insert(std::pair<std::string, double>(tf_name, std::numeric_limits<double>::infinity()));
+    double& best_cost_from_this_goal = best_cost_from_goal.at(tf_name);
+
+    // int number_ik;
+    // if (!ros::param::get("/goals/" + tf_name + "/number_of_ik", number_ik))
+    // {
+    //   ROS_WARN_STREAM("unable to read parameter /goals/" << tf_name + "/number_of_ik (" << i+1 << "th out of " << tf_list.size()
+    //                                                      << ")");
+    //   continue;
+    // }
+    int number_ik = number_ik_per_tf[tf_name];
+    if(number_ik==0)
+    {
       continue;
     }
 
@@ -174,13 +216,19 @@ bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
               std::pair<std::pair<std::string, std::string>, double>(p, std::numeric_limits<double>::infinity()));
         }
 
-        int number_ik2;
-        if (!ros::param::get("/goals/" + tf_name2 + "/number_of_ik", number_ik2))
+        // int number_ik2;
+        // if (!ros::param::get("/goals/" + tf_name2 + "/number_of_ik", number_ik2))
+        // {
+        //   ROS_WARN_STREAM("unable to read parameter /goals/" << tf_name2 << "/number_of_ik (analyzing ik solution # " << isol << " out of " << number_ik << " of " << tf_name <<"  )");
+        //   continue;
+        //   //                    ROS_ERROR_STREAM("unable to read parameter "<< "/goals/"+tf_name2+"/number_of_ik");
+        //   //                    return 0;
+        // }
+
+        int number_ik2 = number_ik_per_tf[tf_name2];
+        if(number_ik2==0)
         {
-          ROS_WARN_STREAM("unable to read parameter /goals/" << tf_name2 << "/number_of_ik (analyzing ik solution # " << isol << " out of " << number_ik << " of " << tf_name <<"  )");
           continue;
-          //                    ROS_ERROR_STREAM("unable to read parameter "<< "/goals/"+tf_name2+"/number_of_ik");
-          //                    return 0;
         }
 
         for (int isol2 = 0; isol2 < number_ik2; isol2++)
