@@ -119,7 +119,6 @@ bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
   int idx_result = 0;
 
   std::map<std::string, int> number_ik_per_tf;
-  std::map<std::string, std::vector< std::vector<double > > > root_ik_per_tf;
   for (size_t i = 0; i < tf_list.size(); i++)
   {
     const std::string& tf_name = tf_list.at(i);
@@ -134,22 +133,6 @@ bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
       number_ik = 0;
     }
     number_ik_per_tf[tf_name] = number_ik;
-    
-    root_ik_per_tf[tf_name] = {{}};
-    for (int isol = 0; isol < number_ik; isol++)
-    {
-      std::string tree_name = "/goals/" + tf_name + "/iksol" + std::to_string(isol);
-      std::vector<double> iksol;
-
-      if (!ros::param::get(tree_name + "/root", iksol))
-      {
-        ROS_ERROR_STREAM("unable to read parameter " << tree_name + "/root");
-        res.message = "Unable to read parameter '" + tree_name + "/root' is not defined";
-        res.success = false;
-        return true;
-      }
-      root_ik_per_tf[tf_name].push_back(iksol);
-    }
   }
   
 
