@@ -72,6 +72,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
   int num_threads = pnh.param("number_of_threads", 5);
   double steps = pnh.param("collision_steps", 0.01);
   double maximum_distance = pnh.param("maximum_distance", 0.01);
+  double max_computation_time = pnh.param("online_max_time", 5.0);
 
   bool enable_approach = pnh.param("enable_approach", true);
 
@@ -293,7 +294,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
         solver.addGoal(g);
         pathplan::PathPtr solution;
 
-        if (solver.solve(solution))
+        if (solver.solve(solution,1e5,max_computation_time))
         {
           last_q = approach;
           last_node = g;
@@ -401,7 +402,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
                                                                                            ub);
 
 
-          pathplan::MultigoalSolver solver(metrics,checker,sampler);
+          pathplan::MultigoalSolver solver(metrics,checker,sampler,1e5,max_computation_time);
           solver.config(solver_nh);
           solver.addStartTree(subtree);
 
