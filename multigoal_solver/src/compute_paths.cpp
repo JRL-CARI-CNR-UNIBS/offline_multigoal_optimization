@@ -402,7 +402,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
                                                                                            ub);
 
 
-          pathplan::MultigoalSolver solver(metrics,checker,sampler,1e5,max_computation_time);
+          pathplan::MultigoalSolver solver(metrics,checker,sampler);
           solver.config(solver_nh);
           solver.addStartTree(subtree);
 
@@ -410,7 +410,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
           solver.addGoal(g);
           pathplan::PathPtr solution;
 
-          if (solver.solve(solution))
+          if (solver.solve(solution,1e5,max_computation_time))
           {
             last_q = p.second;
             connected = true;
@@ -485,7 +485,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
         pathplan::NodePtr g = std::make_shared<pathplan::Node>(new_node->getConfiguration());
         solver.addGoal(g);
         pathplan::PathPtr solution;
-        if (solver.solve(solution))
+        if (solver.solve(solution,1e5,max_computation_time))
         {
           last_q = approach;
 
