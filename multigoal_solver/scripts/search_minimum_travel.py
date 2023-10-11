@@ -6,7 +6,7 @@ import rospy
 import rospkg
 import yaml
 from std_srvs.srv import Trigger, TriggerResponse, TriggerRequest
-
+import networkx as nx
 
 class TravelOptimizer:
     def __init__(self):
@@ -32,8 +32,27 @@ class TravelOptimizer:
                 new_cost_db = new_cost_db.append(new_row, ignore_index = True)
         return new_cost_db
 
+    def is_fully_connected(self, cost_db):
+        self.nodes = list(cost_db.root.unique())
+        nodes_and_edges = {}
+        for n in self.nodes:
+
+            from_node_db = cost_db.loc[cost_db['root'] == n]
+            attached_nodes = list(from_node_db.goal.unique())
+            print(f"from {n} you can go to {attached_nodes}")
+            nodes_and_edges[n] = attached_nodes
+        G = nx.Graph(nodes_and_edges)
+        if nx.is_connected(G):
+            print("subarea are connected")
+            return True
+        else:
+            rospy.logdebug(f"subarea are not connected. Sets {list(nx.connected_components(G))}")
+            self.nodes = list(max(list(nx.connected_components(G))))
+            self.nodes.sort()
+            return False
     def optimze_path(self, req: TriggerRequest):
-        
+
+        resp = TriggerResponse()
         aware_shared_database = os.environ['AWARE_CNR_DB']
 
         blade_info = rospy.get_param("/blade_info")
@@ -44,7 +63,10 @@ class TravelOptimizer:
         cost_db = pd.read_feather(pingInfoFilePath, columns=None, use_threads=True)
         cost_db = self.symmetric_entries(cost_db)
 
-        self.nodes = list(cost_db.root.unique())
+        if not self.is_fully_connected(cost_db):
+            resp.message = f'some subareas are not connected, using only {self.nodes}'
+            rospy.logwarn(resp.message)
+
         ik_number = {}
         for n in self.nodes:
             ik_number[n] = int(1 + cost_db.loc[cost_db['root'] == n]['root_ik_number'].max())
@@ -83,8 +105,7 @@ class TravelOptimizer:
         print(best_sequence)
         print(best_cost)
         travel = list(best_sequence)
-        
-        resp = TriggerResponse()
+
         if len(travel):
             for idx in range(1, len(travel)):
                 print(f'- {travel[idx - 1]["node"]}/iksol{travel[idx - 1]["ik"]} ==> '

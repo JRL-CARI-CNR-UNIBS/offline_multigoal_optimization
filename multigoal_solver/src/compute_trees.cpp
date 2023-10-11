@@ -248,7 +248,7 @@ bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
             return false;
         }
 
-        ROS_DEBUG("Now considering from %s/%u to %s/%u (distance=%f)", tf_name.c_str(), isol, tf_name2.c_str(),
+        ROS_INFO("Now considering from %s/%u to %s/%u (distance=%f)", tf_name.c_str(), isol, tf_name2.c_str(),
                   isol_dest, p.first);
 
         XmlRpc::XmlRpcValue r;
@@ -295,7 +295,7 @@ bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
           // %s/%u",tf_name.c_str(),isol,tf_name2.c_str(),isol_dest);
           break;
         }
-        if (sampler->getFociiDistance() > exploring_coef * (*best_goal_from_tree_to_tree2))
+        if (sampler->getFociiDistance() > exploring_coef * best_cost_from_this_goal)
         {
           ROS_DEBUG("skipped because is too far: from %s/%u to %s/%u. %f/%f", tf_name.c_str(), isol, tf_name2.c_str(),
                     isol_dest, p.first, sampler->getFociiDistance());
@@ -351,7 +351,7 @@ bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
                   solved ? "\033[1;32m found \033[0m" : "\033[31m not found \033[0m");
         if (solved)
         {
-          sampler->setCost(std::min(solution->cost(), best_cost_from_this_goal));
+          sampler->setCost(std::min(solution->cost(), best_cost_from_this_goal*exploring_coef));
           ROS_DEBUG("optimize path from %s/%u to %s/%u", tf_name.c_str(), isol, tf_name2.c_str(), isol_dest);
           solution->setTree(tree);
           pathplan::PathLocalOptimizer path_opt(checker, metrics);
