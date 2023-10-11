@@ -295,7 +295,7 @@ bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
           // %s/%u",tf_name.c_str(),isol,tf_name2.c_str(),isol_dest);
           break;
         }
-        if (sampler->getFociiDistance() > exploring_coef * best_cost_from_this_goal)
+        if (sampler->getFociiDistance() > exploring_coef * (*best_goal_from_tree_to_tree2))
         {
           ROS_DEBUG("skipped because is too far: from %s/%u to %s/%u. %f/%f", tf_name.c_str(), isol, tf_name2.c_str(),
                     isol_dest, p.first, sampler->getFociiDistance());
