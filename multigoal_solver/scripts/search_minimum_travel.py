@@ -57,6 +57,7 @@ class TravelOptimizer:
 
         blade_info = rospy.get_param("/blade_info")
         tool_name = rospy.get_param("/tool_name")
+        max_refine_time = rospy.get_param("/travel_refine_time",60.0)
         file_name = os.path.join(aware_shared_database, "config", "results", blade_info['cloud_filename'])
         pingInfoFilePath = os.path.join(file_name+'_'+tool_name+'_costmap.ftr')
 
@@ -73,14 +74,23 @@ class TravelOptimizer:
 
         best_cost = float('inf')
         best_sequence = []
+
+        t0 = rospy.Time().now()
+
         for idx in range(100):
             # for the first iteration try sorted node sequence, then try random node sequence
             travel_cost, travel_sequence = self.genClosestFirstTravel(self.nodes, ik_number, cost_db, best_cost,
                                                                       best_sequence, idx > 10)
+
             if travel_cost < best_cost:
+
+                t0 = rospy.Time().now()
                 best_cost = travel_cost
                 best_sequence = travel_sequence
                 print('- improve cost to', best_cost)
+                break
+
+            if best_cost < float('inf') and (rospy.Time().now().to_sec()-t0.to_sec()) > max_refine_time:
                 break
 
         column = cost_db['cost']
@@ -100,6 +110,8 @@ class TravelOptimizer:
                 best_cost = travel_cost
                 best_sequence = travel_sequence
                 print('- improve cost to', best_cost)
+                break
+            if best_cost < float('inf') and (rospy.Time().now().to_sec()-t0.to_sec()) > max_refine_time:
                 break
 
         print(best_sequence)
