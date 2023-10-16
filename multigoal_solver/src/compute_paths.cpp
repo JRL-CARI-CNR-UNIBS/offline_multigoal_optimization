@@ -327,7 +327,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
 
     if (!ik_client.call(ik_req, ik_res))
     {
-      res.message = pnh.getNamespace() + " unable to call ik service";
+      res.message = pnh.getNamespace() + " unable to call '" + ik_client.getService() + "'";
       ROS_ERROR("%s", res.message.c_str());
       res.success = false;
       return true;
