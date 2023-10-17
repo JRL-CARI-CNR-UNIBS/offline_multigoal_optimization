@@ -2,9 +2,7 @@
 
 <launch>
 <arg name="debug" default="false" />
-<arg name="print_screen" default="false" />
-<arg name="output_stream" value="screen" if="$(arg print_screen)"/>
-<arg name="output_stream" value="log" unless="$(arg print_screen)"/>
+<arg name="output_stream" default="screen"/>
 
 <node pkg="multigoal_solver"  type="compute_paths" name="compute_paths" output="$(arg output_stream)">
   <rosparam command="load" file="$(find multigoal_solver)/config/test.yaml" />
