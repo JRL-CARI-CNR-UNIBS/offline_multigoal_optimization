@@ -21,6 +21,19 @@
 #include <std_srvs/Trigger.h>
 #include <moveit_msgs/GetPlanningScene.h>
 
+
+constexpr const char * PBSTR = "||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||";
+constexpr const size_t PBWIDTH = 60;
+inline void printProgress(double percentage, const char* hdr, const char* msg)
+{
+  int val = (int)(percentage * 100);
+  int lpad = (int)(percentage * PBWIDTH);
+  int rpad = PBWIDTH - lpad;
+  printf("\r[%s]%3d%% Compute Path [%.*s%*s] %s", hdr, val, lpad, PBSTR, rpad, "", msg);
+  fflush(stdout);
+}
+
+
 void pointCloudCb(const sensor_msgs::PointCloud2ConstPtr& msg, sensor_msgs::PointCloud2Ptr& pc)
 {
   pc.reset(new sensor_msgs::PointCloud2(*msg));
@@ -325,6 +338,8 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
       }
     }
 
+    ROS_INFO("Processing %zu poses of the %d%s batch out of %d batches", ik_req.poses.poses.size(), inode+1, 
+     (inode+1 % 10 == 1 ? "st" : inode+1 % 10 == 2 ? "nd" : "th"), travel.size());
     if (!ik_client.call(ik_req, ik_res))
     {
       res.message = pnh.getNamespace() + " unable to call '" + ik_client.getService() + "'";
@@ -333,10 +348,14 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
       return true;
     }
 
-    ROS_DEBUG("processing %zu poses", ik_res.solutions.size());
-
+    ROS_DEBUG("Processing %zu poses", ik_res.solutions.size());
     for (size_t ip = 0; ip < ik_res.solutions.size(); ip++)
     {
+      char buffer[128]={0};  // maximum expected length of the float
+      std::string nl = (ip == ik_res.solutions.size()-1 ? "\n" : "");
+      std::snprintf(buffer, 128, "Pose %zu of %zu (keypoint %s)%s", ip+1, ik_res.solutions.size(), node.c_str(), nl.c_str());
+
+      printProgress(double(ip+1)/double( ik_res.solutions.size()), "Connect", buffer);
       ROS_DEBUG("Pose %zu of %zu (keypoint %s)", ip, ik_res.solutions.size(), node.c_str());
       ik_solver_msgs::IkSolution& ik = ik_res.solutions.at(ip);
       bool connected = false;
