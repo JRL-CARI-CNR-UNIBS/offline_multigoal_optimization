@@ -104,14 +104,14 @@ bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
     return true;
   }
 
-  int stall_iterations;
-  if (!pnh.getParam("stall_iterations", stall_iterations))
-  {
-    ROS_ERROR("%s/stall_iterations is not defined", pnh.getNamespace().c_str());
-    res.message = "The param '" + pnh.getNamespace() + "/stall_iterations' is not defined";
-    res.success = false;
-    return true;
-  }
+  // int stall_iterations;
+  // if (!pnh.getParam("stall_iterations", stall_iterations))
+  // {
+  //   ROS_ERROR("%s/stall_iterations is not defined", pnh.getNamespace().c_str());
+  //   res.message = "The param '" + pnh.getNamespace() + "/stall_iterations' is not defined";
+  //   res.success = false;
+  //   return true;
+  // }
   std::map<std::pair<std::string, std::string>, double> best_cost_map;
   std::map<std::string, double> best_cost_from_goal;
 
