@@ -4,8 +4,7 @@
   <arg name="optim_params_config_file" /> <!-- default="$(find multigoal_solver)/config/test.yaml" / -->
   <arg name="output_stream" default="log" />
 
-  <node pkg="multigoal_solver" type="compute_trees" name="precompute_trees"
-    output="$(arg output_stream)">
+  <node pkg="multigoal_solver" type="compute_trees" name="precompute_trees" output="$(arg output_stream)">
     <rosparam command="load" file="$(arg optim_params_config_file)" />
   </node>
 </launch>
