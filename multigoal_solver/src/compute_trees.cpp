@@ -123,7 +123,6 @@ bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
   {
     const std::string& tf_name = tf_list.at(i);
     best_cost_from_goal.insert(std::pair<std::string, double>(tf_name, std::numeric_limits<double>::infinity()));
-    double& best_cost_from_this_goal = best_cost_from_goal.at(tf_name);
 
     int number_ik = 0;
     if (!ros::param::get("/goals/" + tf_name + "/number_of_ik", number_ik))
@@ -248,7 +247,7 @@ bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
             return false;
         }
 
-        ROS_INFO("Now considering from %s/%u to %s/%u (distance=%f)", tf_name.c_str(), isol, tf_name2.c_str(),
+        ROS_DEBUG("Now considering from %s/%u to %s/%u (distance=%f)", tf_name.c_str(), isol, tf_name2.c_str(),
                   isol_dest, p.first);
 
         XmlRpc::XmlRpcValue r;
