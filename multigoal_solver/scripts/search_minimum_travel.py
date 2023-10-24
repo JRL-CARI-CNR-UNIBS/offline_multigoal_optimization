@@ -20,7 +20,6 @@ class TravelOptimizer:
 
         new_cost_db = cost_db.copy()
         for index, row in cost_db.iterrows():
-            print(f"{row['root']}: {row['root_ik_number']} -> {row['goal']}: {row['goal_ik_number']}  cost: {row['cost']}")
             tmp = cost_db.loc[(cost_db['root'] == row['goal']) & (cost_db['root_ik_number']==row['goal_ik_number']) &
                               (cost_db['goal'] == row['root']) & (cost_db['goal_ik_number'] == row['root_ik_number'])]
             if (tmp.empty):
@@ -39,11 +38,11 @@ class TravelOptimizer:
 
             from_node_db = cost_db.loc[cost_db['root'] == n]
             attached_nodes = list(from_node_db.goal.unique())
-            print(f"from {n} you can go to {attached_nodes}")
+            rospy.logdebug(f"from {n} you can go to {attached_nodes}")
             nodes_and_edges[n] = attached_nodes
         G = nx.Graph(nodes_and_edges)
         if nx.is_connected(G):
-            print("subarea are connected")
+            rospy.logdebug("subarea are connected")
             return True
         else:
             rospy.logdebug(f"subarea are not connected. Sets {list(nx.connected_components(G))}")
@@ -97,7 +96,7 @@ class TravelOptimizer:
         min_cost = cost_db['cost'].min()
 
         count = column[column > best_cost - (min_cost * (len(self.nodes) - 2))].count()
-        print('row with too much cost', count, 'over', cost_db.shape[0])
+        #rospy.loginfo('row with too much cost', count, 'over', cost_db.shape[0])
         filter_db = cost_db.loc[cost_db['cost'] < (best_cost - (min_cost * (len(self.nodes) - 2)))]
 
         for idx in range(10):
@@ -114,10 +113,18 @@ class TravelOptimizer:
             if best_cost < float('inf') and (rospy.Time().now().to_sec()-t0.to_sec()) > max_refine_time:
                 break
 
-        print(best_sequence)
-        print(best_cost)
         travel = list(best_sequence)
 
+        # remove typewriter effect
+        reverse_connection=0
+        for it in range(0, len(travel) - 1):
+            if travel[it]['node'] > travel[it + 1]['node']:
+                reverse_connection+=1
+
+        if (reverse_connection>len(travel)*0.5):
+            travel.reverse()
+
+        print(travel)
         if len(travel):
             for idx in range(1, len(travel)):
                 print(f'- {travel[idx - 1]["node"]}/iksol{travel[idx - 1]["ik"]} ==> '
