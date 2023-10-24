@@ -74,6 +74,12 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
   double maximum_distance = pnh.param("maximum_distance", 0.01);
   double max_computation_time = pnh.param("online_max_time", 5.0);
 
+  std::map<std::string,double> online_max_joint_elongation;
+  if (!pnh.getParam("online_max_joint_elongation",online_max_joint_elongation))
+  {
+    online_max_joint_elongation.clear();
+  }
+
   bool enable_approach = pnh.param("enable_approach", true);
 
   pathplan::CollisionCheckerPtr checker =
@@ -134,9 +140,19 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
   joint_names=bound_res.joint_names;
   Eigen::VectorXd lb(joint_names.size());
   Eigen::VectorXd ub(joint_names.size());
+  Eigen::VectorXd elongation(joint_names.size());
 
   for (size_t iax=0; iax < bound_res.joint_names.size(); iax++)
   {
+    if (online_max_joint_elongation.count(bound_res.joint_names.at(iax))>0)
+    {
+      elongation(iax)=online_max_joint_elongation.at(bound_res.joint_names.at(iax));
+    }
+    else
+    {
+      elongation(iax)=std::nan("1"); //not set
+    }
+
     lb(iax)=bound_res.lower_bound.at(iax);
     ub(iax)=bound_res.upper_bound.at(iax);
   }
@@ -280,10 +296,23 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
       else
       {
         pathplan::SubtreePtr subtree=std::make_shared<pathplan::Subtree>(tree,last_node);
+
+        Eigen::VectorXd actual_lb=lb;
+        Eigen::VectorXd actual_ub=ub;
+        for (unsigned int iax=0;iax<lb.size();iax++)
+        {
+          if (!std::isnan(elongation(iax)) && elongation(iax)>=0)
+          {
+            double min_value=std::min(last_node->getConfiguration()(iax),approach(iax));
+            double max_value=std::max(last_node->getConfiguration()(iax),approach(iax));
+            actual_lb(iax)=min_value-elongation(iax);
+            actual_ub(iax)=max_value+elongation(iax);
+          }
+        }
         pathplan::InformedSamplerPtr sampler=std::make_shared<pathplan::InformedSampler>(last_node->getConfiguration(),
                                                                                          approach,
-                                                                                         lb,
-                                                                                         ub);
+                                                                                         actual_lb,
+                                                                                         actual_ub);
 
 
         pathplan::MultigoalSolver solver(metrics,checker,sampler);
@@ -400,10 +429,23 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
         for (const std::pair<double, Eigen::VectorXd>& p : ordered_configurations)
         {
 
+          Eigen::VectorXd actual_lb=lb;
+          Eigen::VectorXd actual_ub=ub;
+          for (unsigned int iax=0;iax<lb.size();iax++)
+          {
+            if (!std::isnan(elongation(iax)) && elongation(iax)>=0)
+            {
+              double min_value=std::min(last_node->getConfiguration()(iax),p.second(iax));
+              double max_value=std::max(last_node->getConfiguration()(iax),p.second(iax));
+              actual_lb(iax)=min_value-elongation(iax);
+              actual_ub(iax)=max_value+elongation(iax);
+            }
+          }
+
           pathplan::InformedSamplerPtr sampler=std::make_shared<pathplan::InformedSampler>(last_node->getConfiguration(),
                                                                                            p.second,
-                                                                                           lb,
-                                                                                           ub);
+                                                                                           actual_lb,
+                                                                                           actual_ub);
 
 
           pathplan::MultigoalSolver solver(metrics,checker,sampler);
@@ -478,10 +520,23 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
       {
 
         pathplan::SubtreePtr subtree=std::make_shared<pathplan::Subtree>(tree,last_node);
+
+        Eigen::VectorXd actual_lb=lb;
+        Eigen::VectorXd actual_ub=ub;
+        for (unsigned int iax=0;iax<lb.size();iax++)
+        {
+          if (!std::isnan(elongation(iax)) && elongation(iax)>=0)
+          {
+            double min_value=std::min(last_node->getConfiguration()(iax),new_node->getConfiguration()(iax));
+            double max_value=std::max(last_node->getConfiguration()(iax),new_node->getConfiguration()(iax));
+            actual_lb(iax)=min_value-elongation(iax);
+            actual_ub(iax)=max_value+elongation(iax);
+          }
+        }
         pathplan::InformedSamplerPtr sampler=std::make_shared<pathplan::InformedSampler>(last_node->getConfiguration(),
                                                                                          new_node->getConfiguration(),
-                                                                                         lb,
-                                                                                         ub);
+                                                                                         actual_lb,
+                                                                                         actual_ub);
 
         pathplan::MultigoalSolver solver(metrics,checker,sampler);
         solver.config(solver_nh);
