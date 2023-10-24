@@ -305,8 +305,8 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
           {
             double min_value=std::min(last_node->getConfiguration()(iax),approach(iax));
             double max_value=std::max(last_node->getConfiguration()(iax),approach(iax));
-            actual_lb(iax)=min_value-elongation(iax);
-            actual_ub(iax)=max_value+elongation(iax);
+            actual_lb(iax)=std::max(lb(iax),min_value-elongation(iax));
+            actual_ub(iax)=std::min(ub(iax),max_value+elongation(iax));
           }
         }
         pathplan::InformedSamplerPtr sampler=std::make_shared<pathplan::InformedSampler>(last_node->getConfiguration(),
@@ -437,8 +437,9 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
             {
               double min_value=std::min(last_node->getConfiguration()(iax),p.second(iax));
               double max_value=std::max(last_node->getConfiguration()(iax),p.second(iax));
-              actual_lb(iax)=min_value-elongation(iax);
-              actual_ub(iax)=max_value+elongation(iax);
+              actual_lb(iax)=std::max(lb(iax),min_value-elongation(iax));
+              actual_ub(iax)=std::min(ub(iax),max_value+elongation(iax));
+
             }
           }
 
@@ -529,8 +530,9 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
           {
             double min_value=std::min(last_node->getConfiguration()(iax),new_node->getConfiguration()(iax));
             double max_value=std::max(last_node->getConfiguration()(iax),new_node->getConfiguration()(iax));
-            actual_lb(iax)=min_value-elongation(iax);
-            actual_ub(iax)=max_value+elongation(iax);
+            actual_lb(iax)=std::max(lb(iax),min_value-elongation(iax));
+            actual_ub(iax)=std::min(ub(iax),max_value+elongation(iax));
+
           }
         }
         pathplan::InformedSamplerPtr sampler=std::make_shared<pathplan::InformedSampler>(last_node->getConfiguration(),
