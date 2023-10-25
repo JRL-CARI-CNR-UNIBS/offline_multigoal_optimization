@@ -80,6 +80,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
     online_max_joint_elongation.clear();
   }
 
+
   bool enable_approach = pnh.param("enable_approach", true);
 
   pathplan::CollisionCheckerPtr checker =
@@ -96,7 +97,6 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
     res.success = false;
     return true;
   }
-
 
 
   sensor_msgs::PointCloud2Ptr pc;
@@ -212,7 +212,6 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
   bool first_node = true;
   bool first_time = true;
   pathplan::TreePtr tree;
-
   pathplan::NodePtr last_node;
   pathplan::NodePtr new_node;
 
@@ -226,8 +225,14 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
 
   for (int inode = 0; inode < travel.size(); inode++)
   {
+
     std::string node = travel[inode]["node"];
-    int ik_sol = (int)static_cast<double>(travel[inode]["ik"]);
+
+    int ik_sol;
+    if (travel[inode]["ik"].getType()==travel[inode]["ik"].TypeInt)
+      ik_sol = static_cast<int>(travel[inode]["ik"]);
+    else
+      ik_sol = (int)static_cast<double>(travel[inode]["ik"]);
 
     ik_solver_msgs::GetIkArrayRequest ik_req;
     ik_solver_msgs::GetIkArrayResponse ik_res;
