@@ -58,68 +58,73 @@ class TravelOptimizer:
         tool_name = rospy.get_param("/tool_name")
         max_refine_time = rospy.get_param("/travel_refine_time",60.0)
         file_name = os.path.join(aware_shared_database, "config", "results", blade_info['cloud_filename'])
-        pingInfoFilePath = os.path.join(file_name+'_'+tool_name+'_costmap.ftr')
+        number_of_poi = rospy.get_param("/goals/number_of_poi")
 
-        cost_db = pd.read_feather(pingInfoFilePath, columns=None, use_threads=True)
-        cost_db = self.symmetric_entries(cost_db)
+        if number_of_poi>1:
+            pingInfoFilePath = os.path.join(file_name+'_'+tool_name+'_costmap.ftr')
+            cost_db = pd.read_feather(pingInfoFilePath, columns=None, use_threads=True)
+            cost_db = self.symmetric_entries(cost_db)
 
-        if not self.is_fully_connected(cost_db):
-            resp.message = f'some subareas are not connected, using only {self.nodes}'
-            rospy.logwarn(resp.message)
+            if not self.is_fully_connected(cost_db):
+                resp.message = f'some subareas are not connected, using only {self.nodes}'
+                rospy.logwarn(resp.message)
 
-        ik_number = {}
-        for n in self.nodes:
-            ik_number[n] = int(1 + cost_db.loc[cost_db['root'] == n]['root_ik_number'].max())
+            ik_number = {}
+            for n in self.nodes:
+                ik_number[n] = int(1 + cost_db.loc[cost_db['root'] == n]['root_ik_number'].max())
 
-        best_cost = float('inf')
-        best_sequence = []
+            best_cost = float('inf')
+            best_sequence = []
 
-        t0 = rospy.Time().now()
+            t0 = rospy.Time().now()
 
-        for idx in range(100):
-            # for the first iteration try sorted node sequence, then try random node sequence
-            travel_cost, travel_sequence = self.genClosestFirstTravel(self.nodes, ik_number, cost_db, best_cost,
-                                                                      best_sequence, idx > 10)
+            for idx in range(100):
+                # for the first iteration try sorted node sequence, then try random node sequence
+                travel_cost, travel_sequence = self.genClosestFirstTravel(self.nodes, ik_number, cost_db, best_cost,
+                                                                          best_sequence, idx > 10)
 
-            if travel_cost < best_cost:
+                if travel_cost < best_cost:
 
-                t0 = rospy.Time().now()
-                best_cost = travel_cost
-                best_sequence = travel_sequence
-                print('- improve cost to', best_cost)
-                break
+                    t0 = rospy.Time().now()
+                    best_cost = travel_cost
+                    best_sequence = travel_sequence
+                    print('- improve cost to', best_cost)
+                    break
 
-            if best_cost < float('inf') and (rospy.Time().now().to_sec()-t0.to_sec()) > max_refine_time:
-                break
+                if best_cost < float('inf') and (rospy.Time().now().to_sec()-t0.to_sec()) > max_refine_time:
+                    break
 
-        column = cost_db['cost']
-        min_cost = cost_db['cost'].min()
+            column = cost_db['cost']
+            min_cost = cost_db['cost'].min()
 
-        count = column[column > best_cost - (min_cost * (len(self.nodes) - 2))].count()
-        #rospy.loginfo('row with too much cost', count, 'over', cost_db.shape[0])
-        filter_db = cost_db.loc[cost_db['cost'] < (best_cost - (min_cost * (len(self.nodes) - 2)))]
+            count = column[column > best_cost - (min_cost * (len(self.nodes) - 2))].count()
+            #rospy.loginfo('row with too much cost', count, 'over', cost_db.shape[0])
+            filter_db = cost_db.loc[cost_db['cost'] < (best_cost - (min_cost * (len(self.nodes) - 2)))]
 
-        for idx in range(10):
-            travel_cost, travel_sequence = self.genClosestFirstTravel(random_nodes=self.nodes,
-                                                                      ik_number=ik_number,
-                                                                      cost_db=filter_db,
-                                                                      best_cost=best_cost,
-                                                                      best_sequence=best_sequence)
-            if travel_cost < best_cost:
-                best_cost = travel_cost
-                best_sequence = travel_sequence
-                print('- improve cost to', best_cost)
-                break
-            if best_cost < float('inf') and (rospy.Time().now().to_sec()-t0.to_sec()) > max_refine_time:
-                break
+            for idx in range(10):
+                travel_cost, travel_sequence = self.genClosestFirstTravel(random_nodes=self.nodes,
+                                                                          ik_number=ik_number,
+                                                                          cost_db=filter_db,
+                                                                          best_cost=best_cost,
+                                                                          best_sequence=best_sequence)
+                if travel_cost < best_cost:
+                    best_cost = travel_cost
+                    best_sequence = travel_sequence
+                    print('- improve cost to', best_cost)
+                    break
+                if best_cost < float('inf') and (rospy.Time().now().to_sec()-t0.to_sec()) > max_refine_time:
+                    break
 
-        travel = list(best_sequence)
-
+            travel = list(best_sequence)
+        else:
+            node_name = rospy.get_param("/goals/node_prefix_name")+"0"
+            travel=[{'node': node_name, 'ik': 0}]
         # remove typewriter effect
+        print(travel)
         reverse_connection=0
         for it in range(0, len(travel) - 1):
             if travel[it]['node'] > travel[it + 1]['node']:
-                reverse_connection+=1
+                reverse_connection += 1
 
         if (reverse_connection>len(travel)*0.5):
             travel.reverse()
