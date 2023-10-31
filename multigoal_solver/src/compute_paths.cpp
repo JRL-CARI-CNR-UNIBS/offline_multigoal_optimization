@@ -20,6 +20,7 @@
 #include <ik_solver_msgs/GetBound.h>
 #include <std_srvs/Trigger.h>
 #include <moveit_msgs/GetPlanningScene.h>
+#include "ik_solver_msgs/IkTarget.h"
 
 void pointCloudCb(const sensor_msgs::PointCloud2ConstPtr& msg, sensor_msgs::PointCloud2Ptr& pc)
 {
@@ -236,7 +237,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
 
     ik_solver_msgs::GetIkArrayRequest ik_req;
     ik_solver_msgs::GetIkArrayResponse ik_res;
-    ik_req.poses.header = all_poses.header;
+    ik_req.frame_id = all_poses.header.frame_id;
     ik_req.seed_joint_names = joint_names;
     ik_solver_msgs::Configuration seed;
 
@@ -255,9 +256,8 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
       res.success = false;
       return true;
     }
-
     seed.configuration = iksol;
-    ik_req.seeds.push_back(seed);
+    
 
     q = Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(iksol.data(), iksol.size());
     Eigen::VectorXd approach = q;
@@ -354,12 +354,16 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
     {
       if (group.at(ip) == igroup)
       {
-        ik_req.poses.poses.push_back(all_poses.poses.at(ip));
+        ik_solver_msgs::IkTarget target;
+        target.pose = all_poses.poses.at(ip);
+        target.seeds = {seed};
+        ik_req.targets.push_back(target);
         pose_number.push_back(ip);
       }
     }
 
-    ROS_INFO("Processing %zu poses of the %d%s batch out of %d batches", ik_req.poses.poses.size(), inode+1, 
+    auto st = ros::Time::now();
+    ROS_FATAL(">>>> Processing %zu poses of the %d%s batch out of %d batches", ik_req.targets.size(), inode+1, 
      (inode+1 % 10 == 1 ? "st" : inode+1 % 10 == 2 ? "nd" : "th"), travel.size());
     if (!ik_client.call(ik_req, ik_res))
     {
@@ -368,13 +372,11 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
       res.success = false;
       return true;
     }
+    ROS_FATAL("<<<< Processing %zu poses of the %d%s batch out of %d batches DT %fsec", ik_req.targets.size(), inode+1, 
+      (inode+1 % 10 == 1 ? "st" : inode+1 % 10 == 2 ? "nd" : "th"), travel.size(), (ros::Time::now()-st).toSec());
 
     for (size_t ip = 0; ip < ik_res.solutions.size(); ip++)
     {
-      char buffer[128]={0};  // maximum expected length of the float
-      std::string nl = (ip == ik_res.solutions.size()-1 ? "\n" : "");
-      std::snprintf(buffer, 128, "Pose %zu of %zu (keypoint %s)%s", ip+1, ik_res.solutions.size(), node.c_str(), nl.c_str());
-
       ROS_DEBUG("Pose %zu of %zu (keypoint %s)", ip, ik_res.solutions.size(), node.c_str());
       ik_solver_msgs::IkSolution& ik = ik_res.solutions.at(ip);
       bool connected = false;
@@ -383,7 +385,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
       {
         ROS_DEBUG("Unreachable: Pose %zu of %zu (keypoint %s) has no ik (feasible or unfeasible)", ip, ik_res.solutions.size(), node.c_str());
 
-        no_ik_poses.poses.push_back(ik_req.poses.poses.at(ip));
+        no_ik_poses.poses.push_back(ik_req.targets.at(ip).pose);
       }
 
       std::multimap<double, Eigen::VectorXd> ordered_configurations;
@@ -402,7 +404,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
       {
         ROS_DEBUG("Unreachable: Pose %zu of %zu (keypoint %s) has no feasible ik", ip, ik_res.solutions.size(), node.c_str());
 
-        no_feasible_ik_poses.poses.push_back(ik_req.poses.poses.at(ip));
+        no_feasible_ik_poses.poses.push_back(ik_req.targets.at(ip).pose);
       }
       if (!first_time)
       {
@@ -491,7 +493,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
       {
         ROS_DEBUG("Unreachable: Pose %zu of %zu (keypoint %s)", ip, ik_res.solutions.size(), node.c_str());
 
-        fail_poses.poses.push_back(ik_req.poses.poses.at(ip));
+        fail_poses.poses.push_back(ik_req.targets.at(ip).pose);
       }
       else
       {
