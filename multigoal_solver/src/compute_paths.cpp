@@ -237,7 +237,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
 
     ik_solver_msgs::GetIkArrayRequest ik_req;
     ik_solver_msgs::GetIkArrayResponse ik_res;
-    ik_req.frame_id = all_poses.header.frame_id;
+    
     ik_req.seed_joint_names = joint_names;
     ik_solver_msgs::Configuration seed;
 
@@ -355,7 +355,8 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
       if (group.at(ip) == igroup)
       {
         ik_solver_msgs::IkTarget target;
-        target.pose = all_poses.poses.at(ip);
+        target.pose.pose = all_poses.poses.at(ip);
+        target.pose.header.frame_id = all_poses.header.frame_id;
         target.seeds = {seed};
         ik_req.targets.push_back(target);
         pose_number.push_back(ip);
@@ -375,6 +376,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
     ROS_FATAL("<<<< Processing %zu poses of the %d%s batch out of %d batches DT %fsec", ik_req.targets.size(), inode+1, 
       (inode+1 % 10 == 1 ? "st" : inode+1 % 10 == 2 ? "nd" : "th"), travel.size(), (ros::Time::now()-st).toSec());
 
+
     for (size_t ip = 0; ip < ik_res.solutions.size(); ip++)
     {
       ROS_DEBUG("Pose %zu of %zu (keypoint %s)", ip, ik_res.solutions.size(), node.c_str());
@@ -385,7 +387,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
       {
         ROS_DEBUG("Unreachable: Pose %zu of %zu (keypoint %s) has no ik (feasible or unfeasible)", ip, ik_res.solutions.size(), node.c_str());
 
-        no_ik_poses.poses.push_back(ik_req.targets.at(ip).pose);
+        no_ik_poses.poses.push_back(ik_req.targets.at(ip).pose.pose);
       }
 
       std::multimap<double, Eigen::VectorXd> ordered_configurations;
@@ -404,7 +406,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
       {
         ROS_DEBUG("Unreachable: Pose %zu of %zu (keypoint %s) has no feasible ik", ip, ik_res.solutions.size(), node.c_str());
 
-        no_feasible_ik_poses.poses.push_back(ik_req.targets.at(ip).pose);
+        no_feasible_ik_poses.poses.push_back(ik_req.targets.at(ip).pose.pose);
       }
       if (!first_time)
       {
@@ -493,7 +495,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
       {
         ROS_DEBUG("Unreachable: Pose %zu of %zu (keypoint %s)", ip, ik_res.solutions.size(), node.c_str());
 
-        fail_poses.poses.push_back(ik_req.targets.at(ip).pose);
+        fail_poses.poses.push_back(ik_req.targets.at(ip).pose.pose);
       }
       else
       {
