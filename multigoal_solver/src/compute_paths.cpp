@@ -226,7 +226,6 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
 
   for (int inode = 0; inode < travel.size(); inode++)
   {
-
     std::string node = travel[inode]["node"];
 
     int ik_sol;
@@ -320,30 +319,28 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
                                                                                          actual_ub);
 
 
-        pathplan::MultigoalSolver solver(metrics,checker,sampler);
-        solver.config(solver_nh);
-        solver.addStartTree(subtree);
-
         pathplan::NodePtr g = std::make_shared<pathplan::Node>(approach);
-        solver.addGoal(g);
-        pathplan::PathPtr solution;
-
-        if (solver.solve(solution,1e5,max_computation_time))
+        pathplan::MultigoalSolver solver(metrics,checker,sampler);
+        if(solver.config(solver_nh) && solver.addStartTree(subtree) && solver.addGoal(g))
         {
-          last_q = approach;
-          last_node = g;
-          solution->setTree(tree);
-
-          pathplan::PathLocalOptimizer path_opt(checker, metrics);
-          path_opt.setPath(solution);
-          path_opt.solve(solution,100000);
-          std::vector<pathplan::ConnectionPtr> tmp_connections=solution->getConnections();
-
-
-          for (size_t iconnection = 0; iconnection < tmp_connections.size(); iconnection++)
+          pathplan::PathPtr solution;
+          if (solver.solve(solution,1e5,max_computation_time))
           {
-            connections.push_back(tmp_connections.at(iconnection));
-            order_pose_number.push_back(-10);
+            last_q = approach;
+            last_node = g;
+            solution->setTree(tree);
+
+            pathplan::PathLocalOptimizer path_opt(checker, metrics);
+            path_opt.setPath(solution);
+            path_opt.solve(solution,100000);
+            std::vector<pathplan::ConnectionPtr> tmp_connections=solution->getConnections();
+
+
+            for (size_t iconnection = 0; iconnection < tmp_connections.size(); iconnection++)
+            {
+              connections.push_back(tmp_connections.at(iconnection));
+              order_pose_number.push_back(-10);
+            }
           }
         }
       }
@@ -458,35 +455,34 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
                                                                                            actual_ub);
 
 
-          pathplan::MultigoalSolver solver(metrics,checker,sampler);
-          solver.config(solver_nh);
-          solver.addStartTree(subtree);
-
           pathplan::NodePtr g = std::make_shared<pathplan::Node>(p.second);
-          solver.addGoal(g);
-          pathplan::PathPtr solution;
-
-          if (solver.solve(solution,1e5,max_computation_time))
+          pathplan::MultigoalSolver solver(metrics,checker,sampler);
+          if(solver.config(solver_nh) && solver.addStartTree(subtree) && solver.addGoal(g))
           {
-            last_q = p.second;
-            connected = true;
+            pathplan::PathPtr solution;
 
-            first_time = false;
-            solution->setTree(tree);
-
-            pathplan::PathLocalOptimizer path_opt(checker, metrics);
-            path_opt.setPath(solution);
-            path_opt.solve(solution,100000);
-            std::vector<pathplan::ConnectionPtr> tmp_connections=solution->getConnections();
-
-            last_node = g;
-
-            for (size_t iconnection = 0; iconnection < tmp_connections.size(); iconnection++)
+            if (solver.solve(solution,1e5,max_computation_time))
             {
-              connections.push_back(tmp_connections.at(iconnection));
-              order_pose_number.push_back(pose_number.at(ip));
+              last_q = p.second;
+              connected = true;
+
+              first_time = false;
+              solution->setTree(tree);
+
+              pathplan::PathLocalOptimizer path_opt(checker, metrics);
+              path_opt.setPath(solution);
+              path_opt.solve(solution,100000);
+              std::vector<pathplan::ConnectionPtr> tmp_connections=solution->getConnections();
+
+              last_node = g;
+
+              for (size_t iconnection = 0; iconnection < tmp_connections.size(); iconnection++)
+              {
+                connections.push_back(tmp_connections.at(iconnection));
+                order_pose_number.push_back(pose_number.at(ip));
+              }
+              break;
             }
-            break;
           }
         }
       }
@@ -549,35 +545,38 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
                                                                                          actual_lb,
                                                                                          actual_ub);
 
-        pathplan::MultigoalSolver solver(metrics,checker,sampler);
-        solver.config(solver_nh);
-     
         pathplan::NodePtr g = std::make_shared<pathplan::Node>(new_node->getConfiguration());
-        solver.addGoal(g);
-        pathplan::PathPtr solution;
-        if (solver.solve(solution,1e5,max_computation_time))
+        pathplan::MultigoalSolver solver(metrics,checker,sampler);
+        if(solver.config(solver_nh) && solver.addGoal(g))
         {
-          last_q = approach;
-
-          last_node = g;
-          solution->setTree(tree);
-
-          pathplan::PathLocalOptimizer path_opt(checker, metrics);
-          path_opt.setPath(solution);
-          path_opt.solve(solution,100000);
-          std::vector<pathplan::ConnectionPtr> tmp_connections=solution->getConnections();
-
-          for (size_t iconnection = 0; iconnection < tmp_connections.size(); iconnection++)
+          pathplan::PathPtr solution;
+          if (solver.solve(solution,1e5,max_computation_time))
           {
-            connections.push_back(tmp_connections.at(iconnection));
-            order_pose_number.push_back(-10);
+            last_q = approach;
+
+            last_node = g;
+            solution->setTree(tree);
+
+            pathplan::PathLocalOptimizer path_opt(checker, metrics);
+            path_opt.setPath(solution);
+            path_opt.solve(solution,100000);
+            std::vector<pathplan::ConnectionPtr> tmp_connections=solution->getConnections();
+
+            for (size_t iconnection = 0; iconnection < tmp_connections.size(); iconnection++)
+            {
+              connections.push_back(tmp_connections.at(iconnection));
+              order_pose_number.push_back(-10);
+            }
+          }
+          else
+          {
+            ROS_WARN("Unable to find a solution to back to approach");
           }
         }
         else
         {
-          ROS_WARN("Unable to come back to approach");
+          ROS_WARN("The solver configuration failed, likely tyhe approach goal cannot be added...weird ...");
         }
-
       }
     }
 
