@@ -20,6 +20,7 @@
 #include <ik_solver_msgs/GetBound.h>
 #include <std_srvs/Trigger.h>
 #include <moveit_msgs/GetPlanningScene.h>
+#include <string>
 #include "ik_solver_msgs/IkTarget.h"
 
 void pointCloudCb(const sensor_msgs::PointCloud2ConstPtr& msg, sensor_msgs::PointCloud2Ptr& pc)
@@ -209,6 +210,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
 
   geometry_msgs::PoseArray no_ik_poses;
   no_ik_poses.header.frame_id = pc->header.frame_id;
+  no_ik_poses.poses.clear();
 
   bool first_node = true;
   bool first_time = true;
@@ -223,6 +225,11 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
   XmlRpc::XmlRpcValue configurations;
   std::vector<int> configurations_number;
   int configurations_size = 0;
+
+  ros::param::set("/complete/number_of_fail_poses", 0);
+  ros::param::set("/complete/number_of_no_feasible_ik_poses", 0);
+  ros::param::set("/complete/number_of_no_ik_poses", 0);
+  
 
   for (int inode = 0; inode < travel.size(); inode++)
   {
@@ -361,8 +368,8 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
     }
 
     auto st = ros::Time::now();
-    ROS_FATAL(">>>> Processing %zu poses of the %d%s batch out of %d batches", ik_req.targets.size(), inode+1, 
-     (inode+1 % 10 == 1 ? "st" : inode+1 % 10 == 2 ? "nd" : "th"), travel.size());
+    std::string hdr = "["+std::to_string(inode+1)+ (inode+1 % 10 == 1 ? "st" : inode+1 % 10 == 2 ? "nd" : "th") + " out of " + std::to_string(travel.size()) + " sub-areas]";
+    ROS_WARN("%s >>>> Processing %zu poses ", hdr.c_str(), ik_req.targets.size());
     if (!ik_client.call(ik_req, ik_res))
     {
       res.message = pnh.getNamespace() + " unable to call '" + ik_client.getService() + "'";
@@ -370,10 +377,17 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
       res.success = false;
       return true;
     }
-    ROS_FATAL("<<<< Processing %zu poses of the %d%s batch out of %d batches DT %fsec", ik_req.targets.size(), inode+1, 
-      (inode+1 % 10 == 1 ? "st" : inode+1 % 10 == 2 ? "nd" : "th"), travel.size(), (ros::Time::now()-st).toSec());
+    if(ik_req.targets.size() != ik_res.solutions.size())
+    {
+      res.message = pnh.getNamespace() + " Service '" + ik_client.getService() + "' returned a number of solutions different from expected. Req: " + std::to_string(ik_req.targets.size()) + " Res: " + std::to_string(ik_res.solutions.size());
+      ROS_ERROR("%s", res.message.c_str());
+      res.success = false;
+      return true;
+    }
+    ROS_WARN("%s <<<< Processing %zu poses DT %fsec", hdr.c_str(), ik_req.targets.size(), (ros::Time::now()-st).toSec());
 
-
+    st = ros::Time::now();
+    ROS_WARN("%s >>>> Checking Collisions and Connect the %zu poses", hdr.c_str(), ik_res.solutions.size());
     for (size_t ip = 0; ip < ik_res.solutions.size(); ip++)
     {
       ROS_DEBUG("Pose %zu of %zu (keypoint %s)", ip, ik_res.solutions.size(), node.c_str());
@@ -385,6 +399,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
         ROS_DEBUG("Unreachable: Pose %zu of %zu (keypoint %s) has no ik (feasible or unfeasible)", ip, ik_res.solutions.size(), node.c_str());
 
         no_ik_poses.poses.push_back(ik_req.targets.at(ip).pose.pose);
+        continue;
       }
 
       std::multimap<double, Eigen::VectorXd> ordered_configurations;
@@ -404,6 +419,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
         ROS_DEBUG("Unreachable: Pose %zu of %zu (keypoint %s) has no feasible ik", ip, ik_res.solutions.size(), node.c_str());
 
         no_feasible_ik_poses.poses.push_back(ik_req.targets.at(ip).pose.pose);
+        continue;
       }
       if (!first_time)
       {
@@ -505,7 +521,9 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
         configurations_size++;
       }
     }
+    ROS_WARN("%s <<<< Checking Collisions and Connect the %zu poses DT %fsec", hdr.c_str(), ik_res.solutions.size(), (ros::Time::now()-st).toSec());
 
+    ROS_WARN("%s >>>> Connect To Approach", hdr.c_str());
     if ((inode < travel.size()-1) && enable_approach)
     {
       ROS_DEBUG("return to approach");
@@ -579,7 +597,11 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
         }
       }
     }
+    ROS_WARN("%s <<<< Connect To Approach DT %fsec", hdr.c_str(), (ros::Time::now()-st).toSec());
 
+    ros::param::set("/complete/number_of_fail_poses", int(fail_poses.poses.size()));
+    ros::param::set("/complete/number_of_no_feasible_ik_poses", int(no_feasible_ik_poses.poses.size()));
+    ros::param::set("/complete/number_of_no_ik_poses", int(no_ik_poses.poses.size()));
     failed_poses_pub.publish(fail_poses);
     no_feasible_ik_poses_pub.publish(no_feasible_ik_poses);
     no_ik_poses_pub.publish(no_ik_poses);
