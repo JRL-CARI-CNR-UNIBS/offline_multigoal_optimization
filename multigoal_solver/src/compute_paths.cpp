@@ -44,6 +44,23 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
     return true;
   }
 
+  double max_path_step;
+  if (!pnh.getParam("max_path_step", max_path_step))
+  {
+    res.message =  pnh.getNamespace() + "/max_path_step is not defined";
+    ROS_ERROR("%s", res.message.c_str());
+    res.success = false;
+    return true;
+  }
+  if (max_path_step<=0)
+  {
+    res.message =  pnh.getNamespace() + "/max_path_step must be positive";
+    ROS_ERROR("%s", res.message.c_str());
+    res.success = false;
+    return true;
+  }
+
+
   ros::ServiceClient ps_client = nh.serviceClient<moveit_msgs::GetPlanningScene>("/get_planning_scene");
   ps_client.waitForExistence();
   moveit_msgs::GetPlanningScene ps_srv;
@@ -75,6 +92,8 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
   double steps = pnh.param("collision_steps", 0.01);
   double maximum_distance = pnh.param("maximum_distance", 0.01);
   double max_computation_time = pnh.param("online_max_time", 5.0);
+
+
 
   std::map<std::string,double> online_max_joint_elongation;
   if (!pnh.getParam("online_max_joint_elongation",online_max_joint_elongation))
@@ -233,6 +252,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
 
   for (int inode = 0; inode < travel.size(); inode++)
   {
+
     std::string node = travel[inode]["node"];
 
     int ik_sol;
@@ -262,6 +282,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
       res.success = false;
       return true;
     }
+
     seed.configuration = iksol;
     
 
@@ -613,9 +634,16 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
   if (connections.size() > 0)
   {
     pathplan::Path path(connections, metrics, checker);
-    XmlRpc::XmlRpcValue xml_path = path.toXmlRpcValue();
+    std::vector<int> connection_number;
+    pathplan::PathPtr resampled_path=path.resample(max_path_step, connection_number);
+    std::vector<int> resampled_order_pose_number(connection_number.size());
+    for (size_t isampled=0;isampled<connection_number.size();isampled++)
+    {
+      resampled_order_pose_number.at(isampled)=order_pose_number.at(connection_number.at(isampled));
+    }
+    XmlRpc::XmlRpcValue xml_path = resampled_path->toXmlRpcValue();
     pnh.setParam("/complete/path/cloud", xml_path);
-    pnh.setParam("/complete/path/cloud_pose_number", order_pose_number);
+    pnh.setParam("/complete/path/cloud_pose_number", resampled_order_pose_number);
     pnh.setParam("/complete/configurations", configurations);
     pnh.setParam("/complete/configurations_number", configurations_number);
 
