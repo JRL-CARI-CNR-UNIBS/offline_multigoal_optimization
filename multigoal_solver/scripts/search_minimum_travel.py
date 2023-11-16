@@ -49,6 +49,7 @@ class TravelOptimizer:
             self.nodes = list(max(list(nx.connected_components(G))))
             self.nodes.sort()
             return False
+        
     def optimze_path(self, req: TriggerRequest):
 
         resp = TriggerResponse()
