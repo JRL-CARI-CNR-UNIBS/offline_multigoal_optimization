@@ -390,7 +390,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
     ROS_WARN("%s >>>> Checking Collisions and Connect the %zu poses", hdr.c_str(), ik_res.solutions.size());
     for (size_t ip = 0; ip < ik_res.solutions.size(); ip++)
     {
-      ROS_DEBUG("Pose %zu of %zu (keypoint %s)", ip, ik_res.solutions.size(), node.c_str());
+      ROS_DEBUG("Pose %zu of %zu (keypoint %s) IK sols %zu", ip, ik_res.solutions.size(), node.c_str(), ik_res.solutions.at(ip).configurations.size());
       ik_solver_msgs::IkSolution& ik = ik_res.solutions.at(ip);
       bool connected = false;
 
