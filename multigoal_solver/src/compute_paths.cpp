@@ -634,18 +634,28 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
   if (connections.size() > 0)
   {
     pathplan::Path path(connections, metrics, checker);
-    std::vector<int> connection_number;
-    pathplan::PathPtr resampled_path=path.resample(max_path_step, connection_number);
-    std::vector<int> resampled_order_pose_number(connection_number.size());
-    for (size_t isampled=0;isampled<connection_number.size();isampled++)
+    if(1)
     {
-      resampled_order_pose_number.at(isampled)=order_pose_number.at(connection_number.at(isampled));
+      std::vector<int> connection_number;
+      pathplan::PathPtr resampled_path=path.resample(max_path_step, connection_number);
+      std::vector<int> resampled_order_pose_number(connection_number.size());
+      for (size_t isampled=0;isampled<connection_number.size();isampled++)
+      {
+        resampled_order_pose_number.at(isampled)=order_pose_number.at(connection_number.at(isampled));
+      }
+      XmlRpc::XmlRpcValue xml_path = resampled_path->toXmlRpcValue();
+      pnh.setParam("/complete/path/cloud", xml_path);
+      pnh.setParam("/complete/path/cloud_pose_number", resampled_order_pose_number);
     }
-    XmlRpc::XmlRpcValue xml_path = resampled_path->toXmlRpcValue();
-    pnh.setParam("/complete/path/cloud", xml_path);
-    pnh.setParam("/complete/path/cloud_pose_number", resampled_order_pose_number);
+    else
+    {    
+      XmlRpc::XmlRpcValue xml_path = path.toXmlRpcValue();
+      pnh.setParam("/complete/path/cloud", xml_path);
+      pnh.setParam("/complete/path/cloud_pose_number", order_pose_number);
+    }
     pnh.setParam("/complete/configurations", configurations);
     pnh.setParam("/complete/configurations_number", configurations_number);
+
 
     res.success = true;
   }
