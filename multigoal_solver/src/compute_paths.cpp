@@ -42,6 +42,23 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
     return true;
   }
 
+  double max_path_step;
+  if (!pnh.getParam("max_path_step", max_path_step))
+  {
+    res.message =  pnh.getNamespace() + "/max_path_step is not defined";
+    ROS_ERROR("%s", res.message.c_str());
+    res.success = false;
+    return true;
+  }
+  if (max_path_step<=0)
+  {
+    res.message =  pnh.getNamespace() + "/max_path_step must be positive";
+    ROS_ERROR("%s", res.message.c_str());
+    res.success = false;
+    return true;
+  }
+
+
   ros::ServiceClient ps_client = nh.serviceClient<moveit_msgs::GetPlanningScene>("/get_planning_scene");
   ps_client.waitForExistence();
   moveit_msgs::GetPlanningScene ps_srv;
@@ -73,6 +90,8 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
   double steps = pnh.param("collision_steps", 0.01);
   double maximum_distance = pnh.param("maximum_distance", 0.01);
   double max_computation_time = pnh.param("online_max_time", 5.0);
+
+
 
   std::map<std::string,double> online_max_joint_elongation;
   if (!pnh.getParam("online_max_joint_elongation",online_max_joint_elongation))
@@ -588,7 +607,8 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
   if (connections.size() > 0)
   {
     pathplan::Path path(connections, metrics, checker);
-    XmlRpc::XmlRpcValue xml_path = path.toXmlRpcValue();
+    pathplan::PathPtr resampled_path=path.resample(max_path_step);
+    XmlRpc::XmlRpcValue xml_path = resampled_path->toXmlRpcValue();
     pnh.setParam("/complete/path/cloud", xml_path);
     pnh.setParam("/complete/path/cloud_pose_number", order_pose_number);
     pnh.setParam("/complete/configurations", configurations);
