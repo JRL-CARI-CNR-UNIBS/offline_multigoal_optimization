@@ -22,6 +22,7 @@ double weightedCost(const pathplan::PathPtr& path, const Eigen::MatrixXd& weight
   double cost=0.0;
   for (const pathplan::ConnectionPtr& conn: path->getConnections())
   {
+    Eigen::VectorXd q = conn->getChild()->getConfiguration() - conn->getParent()->getConfiguration();
     cost+=std::sqrt(q.transpose() * weight * q);
   }
   return cost;
