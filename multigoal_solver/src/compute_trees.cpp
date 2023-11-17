@@ -15,7 +15,19 @@
 #include <ik_solver_msgs/GetIk.h>
 #include <std_srvs/Trigger.h>
 #include <moveit_msgs/GetPlanningScene.h>
+#include "Eigen/src/Core/Matrix.h"
 
+double weightedCost(const pathplan::PathPtr& path, const Eigen::MatrixXd& weight)
+{
+  double cost=0.0;
+  for (const pathplan::ConnectionPtr& conn: path->getConnections())
+  {
+    const Eigen::VectorXd& q1 = conn->getParent()->getConfiguration();
+    const Eigen::VectorXd& q2 = conn->getChild()->getConfiguration();
+    cost+=std::sqrt(q1.transpose() * weight * q2);
+  }
+  return cost;
+}
 bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
 {
   ros::NodeHandle pnh("~");
@@ -65,6 +77,27 @@ bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
   int num_threads = pnh.param("number_of_threads", 5);
   double steps = pnh.param("collision_steps", 0.01);
   double maximum_distance = pnh.param("maximum_distance", 0.01);
+  std::vector<double> w;
+  
+  if (!pnh.getParam("weight", w))
+  {
+    res.success = false;
+    res.message =  pnh.getNamespace() + "/weight is not defined";
+    ROS_ERROR("%s", res.message.c_str());
+    return true;
+  }
+  if (w.size()!=dof)
+  {
+    res.success = false;
+    res.message =  pnh.getNamespace() + "/weight dimension is wrong";
+    ROS_ERROR("%s", res.message.c_str());
+    return true;
+  }
+
+  Eigen::MatrixXd weight(w.size(), w.size());
+  weight.setIdentity();
+  for (int iax = 0; iax < w.size(); iax++)
+    weight(iax, iax) = w.at(iax);
 
   pathplan::CollisionCheckerPtr checker =
       std::make_shared<pathplan::MoveitCollisionChecker>(planning_scene, group_name, maximum_distance);
@@ -403,6 +436,7 @@ bool treesCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
 
         if (solved)
         {
+          //double cost = weightedCost(solution, weight);
           double cost = solution->cost();
           best_cost_from_this_goal = std::min(cost, best_cost_from_this_goal);
 

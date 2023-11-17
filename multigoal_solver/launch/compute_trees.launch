@@ -2,9 +2,15 @@
 
 <launch>
   <arg name="optim_params_config_file" /> <!-- default="$(find multigoal_solver)/config/test.yaml" / -->
+  <arg name="compute_tree_params" /> <!-- default="$(find multigoal_solver)/config/test.yaml" / -->
   <arg name="output_stream" default="log" />
 
-  <node pkg="multigoal_solver" type="compute_trees" name="precompute_trees" output="$(arg output_stream)">
+  <arg name="debug" default="false" />
+  <arg name="launch_prefix" default="xterm -e gdb -ex run  --args" if="$(arg debug)" />
+  <arg name="launch_prefix" default=""                         unless="$(arg debug)" />
+
+  <node pkg="multigoal_solver" type="compute_trees" name="precompute_trees" output="$(arg output_stream)" launch-prefix="$(arg launch_prefix)">
     <rosparam command="load" file="$(arg optim_params_config_file)" />
+    <rosparam command="load" file="$(arg compute_tree_params)" />
   </node>
 </launch>
