@@ -20,6 +20,7 @@
 #include <ik_solver_msgs/GetBound.h>
 #include <std_srvs/Trigger.h>
 #include <moveit_msgs/GetPlanningScene.h>
+#include <iterator>
 #include <string>
 #include "ik_solver_msgs/IkTarget.h"
 
@@ -270,7 +271,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
     std::string s = node;
     s.erase(std::remove_if(std::begin(s), std::end(s), [](char ch) { return !std::isdigit(ch); }), s.end());
     int igroup = std::stoi(s);
-    ROS_DEBUG("node %s ik=%d, group=%d", node.c_str(), ik_sol, igroup);
+    /* */ ROS_DEBUG("node %s ik=%d, group=%d", node.c_str(), ik_sol, igroup);
 
     std::string tree_name = "/goals/" + node + "/iksol" + std::to_string(ik_sol);
     std::vector<double> iksol;
@@ -323,7 +324,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
         order_pose_number.push_back(-10);
         tree->addNode(new_node);
         last_node = new_node;
-        ROS_DEBUG("connect with next keypoint");
+        /* */ ROS_DEBUG("connect with next keypoint");
       }
       else
       {
@@ -411,13 +412,14 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
     ROS_WARN("%s >>>> Checking Collisions and Connect the %zu poses", hdr.c_str(), ik_res.solutions.size());
     for (size_t ip = 0; ip < ik_res.solutions.size(); ip++)
     {
-      ROS_DEBUG("Pose %zu of %zu (keypoint %s) IK sols %zu", ip, ik_res.solutions.size(), node.c_str(), ik_res.solutions.at(ip).configurations.size());
+      std::string _hdr = ">>>> " + hdr +" Pose " + std::to_string(ip) + " of " + std::to_string(ik_res.solutions.size()) + " (keypoint "+node+ ")";
+      /* */ ROS_DEBUG(">>>> %s IK sols %zu", _hdr.c_str(), ik_res.solutions.at(ip).configurations.size());
       ik_solver_msgs::IkSolution& ik = ik_res.solutions.at(ip);
       bool connected = false;
 
       if (ik.configurations.empty())
       {
-        ROS_DEBUG("Unreachable: Pose %zu of %zu (keypoint %s) has no ik (feasible or unfeasible)", ip, ik_res.solutions.size(), node.c_str());
+        /* */ ROS_DEBUG("%s IK did not found solution", _hdr.c_str());
 
         no_ik_poses.poses.push_back(ik_req.targets.at(ip).pose.pose);
         continue;
@@ -437,8 +439,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
 
       if (ordered_configurations.empty())
       {
-        ROS_DEBUG("Unreachable: Pose %zu of %zu (keypoint %s) has no feasible ik", ip, ik_res.solutions.size(), node.c_str());
-
+        /* */ ROS_DEBUG("%s IK found solution, but it is in collision ...", _hdr.c_str());
         no_feasible_ik_poses.poses.push_back(ik_req.targets.at(ip).pose.pose);
         continue;
       }
@@ -466,12 +467,16 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
       }
       if (!connected)
       {
-        ROS_DEBUG("Pose %zu of %zu (keypoint %s): Try connect", ip, ik_res.solutions.size(), node.c_str());
+        /* */ ROS_WARN("%s Try Connect", _hdr.c_str());
         pathplan::SubtreePtr subtree=std::make_shared<pathplan::Subtree>(tree,last_node);
 
-        for (const std::pair<double, Eigen::VectorXd>& p : ordered_configurations)
+        for (auto it = ordered_configurations.begin(); it != ordered_configurations.end(); ++it)
         {
+          size_t iti = std::distance(ordered_configurations.begin(), it);
+          std::string __hdr = "Try solving " +std::to_string(iti)+ " configuration of " + std::to_string(ordered_configurations.size());
 
+          /* */ ROS_DEBUG(">>>> %s ", __hdr.c_str()); 
+          const std::pair<double, Eigen::VectorXd>& p = *it;
           Eigen::VectorXd actual_lb=lb;
           Eigen::VectorXd actual_ub=ub;
           for (unsigned int iax=0;iax<lb.size();iax++)
@@ -482,7 +487,6 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
               double max_value=std::max(last_node->getConfiguration()(iax),p.second(iax));
               actual_lb(iax)=std::max(lb(iax),min_value-elongation(iax));
               actual_ub(iax)=std::min(ub(iax),max_value+elongation(iax));
-
             }
           }
 
@@ -494,10 +498,13 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
 
           pathplan::NodePtr g = std::make_shared<pathplan::Node>(p.second);
           pathplan::MultigoalSolver solver(metrics,checker,sampler);
+          
+          /* */ ROS_DEBUG(">>>> %s Solver Config", __hdr.c_str()); 
           if(solver.config(solver_nh) && solver.addStartTree(subtree) && solver.addGoal(g))
           {
             pathplan::PathPtr solution;
 
+            /* */ ROS_DEBUG(">>>> %s Solve", __hdr.c_str()); 
             if (solver.solve(solution,1e5,max_computation_time))
             {
               last_q = p.second;
@@ -526,7 +533,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
 
       if (!connected)
       {
-        ROS_DEBUG("Unreachable: Pose %zu of %zu (keypoint %s)", ip, ik_res.solutions.size(), node.c_str());
+        /* */ ROS_DEBUG(">>>> %s Not Connected ... ", _hdr.c_str()); 
 
         fail_poses.poses.push_back(ik_req.targets.at(ip).pose.pose);
       }
@@ -547,7 +554,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
     ROS_WARN("%s >>>> Connect To Approach", hdr.c_str());
     if ((inode < travel.size()-1) && enable_approach)
     {
-      ROS_DEBUG("return to approach");
+      /* */ ROS_DEBUG("return to approach");
 
       if (checker->checkPath(last_node->getConfiguration(), approach))
       {
@@ -634,16 +641,32 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
   if (connections.size() > 0)
   {
     pathplan::Path path(connections, metrics, checker);
+    XmlRpc::XmlRpcValue xml_path_original = path.toXmlRpcValue();
+    ROS_WARN("Original || Size Cloud: %d", xml_path_original.size());
+    ROS_WARN("Original || Size Ordered Pose Number: %zu", order_pose_number.size());
+    ROS_WARN("Original || Size Cloud Connections: %zu", path.getConnections().size());
     if(1)
     {
-      std::vector<int> connection_number;
-      pathplan::PathPtr resampled_path=path.resample(max_path_step, connection_number);
-      std::vector<int> resampled_order_pose_number(connection_number.size());
-      for (size_t isampled=0;isampled<connection_number.size();isampled++)
+      std::map<int,int> map_node_from_orig_to_new;
+      pathplan::PathPtr resampled_path=path.resample(max_path_step, map_node_from_orig_to_new);
+      assert(map_node_from_orig_to_new.size()==order_pose_number.size());
+
+      std::vector<int> resampled_order_pose_number(resampled_path->getConnections().size()+1);
+      for (size_t isampled=0;isampled<resampled_order_pose_number.size();isampled++)
       {
-        resampled_order_pose_number.at(isampled)=order_pose_number.at(connection_number.at(isampled));
+        auto it = map_node_from_orig_to_new.find(isampled);
+        if( it != map_node_from_orig_to_new.end() )
+        {
+          resampled_order_pose_number.at(isampled) = order_pose_number.at(it->first);
+        }
+        else
+        {
+          resampled_order_pose_number.at(isampled) = -10;
+        }
       }
       XmlRpc::XmlRpcValue xml_path = resampled_path->toXmlRpcValue();
+      ROS_WARN("Resampled || Size Cloud: %d", xml_path.size());
+      ROS_WARN("Resampled || Ordered Pose Number: %zu", resampled_order_pose_number.size());
       pnh.setParam("/complete/path/cloud", xml_path);
       pnh.setParam("/complete/path/cloud_pose_number", resampled_order_pose_number);
     }
