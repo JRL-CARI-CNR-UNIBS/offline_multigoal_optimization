@@ -20,8 +20,10 @@
 #include <ik_solver_msgs/GetBound.h>
 #include <std_srvs/Trigger.h>
 #include <moveit_msgs/GetPlanningScene.h>
+#include <algorithm>
 #include <iterator>
 #include <string>
+#include <limits>
 #include "ik_solver_msgs/IkTarget.h"
 
 void pointCloudCb(const sensor_msgs::PointCloud2ConstPtr& msg, sensor_msgs::PointCloud2Ptr& pc)
@@ -175,8 +177,11 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
       elongation(iax)=std::nan("1"); //not set
     }
 
-    lb(iax)=bound_res.lower_bound.at(iax);
-    ub(iax)=bound_res.upper_bound.at(iax);
+    std::vector< ::ik_solver_msgs::JointRange>::const_iterator im = std::min_element(bound_res.boundaries.at(iax).joint_ranges.begin(), bound_res.boundaries.at(iax).joint_ranges.end(), [](const ik_solver_msgs::JointRange& lhs, const ik_solver_msgs::JointRange & rhs){ return lhs.lower_bound > rhs.lower_bound;});
+    lb(iax)= (im == bound_res.boundaries.at(iax).joint_ranges.end() ? - std::numeric_limits<double>::infinity() : im->lower_bound);
+
+    std::vector< ::ik_solver_msgs::JointRange>::const_iterator iM = std::max_element(bound_res.boundaries.at(iax).joint_ranges.begin(), bound_res.boundaries.at(iax).joint_ranges.end(), [](const ik_solver_msgs::JointRange& lhs, const ik_solver_msgs::JointRange & rhs){ return lhs.lower_bound < rhs.lower_bound;});
+    ub(iax)=(im == bound_res.boundaries.at(iax).joint_ranges.end() ? std::numeric_limits<double>::infinity() : im->upper_bound);
   }
 
   ros::Publisher failed_poses_pub = nh.advertise<geometry_msgs::PoseArray>("fail_poses", 10, true);
@@ -190,7 +195,9 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
   {
     ros::spinOnce();
     if (pc)
+    {
       break;
+    }
     lp.sleep();
   }
 
