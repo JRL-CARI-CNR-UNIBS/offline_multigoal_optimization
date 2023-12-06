@@ -121,16 +121,16 @@ class TravelOptimizer:
             node_name = rospy.get_param("/goals/node_prefix_name")+"0"
             travel=[{'node': node_name, 'ik': 0}]
         # remove typewriter effect
-        print(travel)
+        rospy.logerr(travel)
         reverse_connection=0
         for it in range(0, len(travel) - 1):
             if travel[it]['node'] > travel[it + 1]['node']:
                 reverse_connection += 1
 
-        if (reverse_connection>len(travel)*0.5):
+        if (reverse_connection>=len(travel)*0.5):
             travel.reverse()
 
-        print(travel)
+        rospy.logerr(travel)
         if len(travel):
             for idx in range(1, len(travel)):
                 print(f'- {travel[idx - 1]["node"]}/iksol{travel[idx - 1]["ik"]} ==> '

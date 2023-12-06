@@ -22,7 +22,7 @@
 #include <moveit_msgs/GetPlanningScene.h>
 #include <iterator>
 #include <string>
-#include "ik_solver_msgs/IkTarget.h"
+#include <ik_solver_msgs/IkTarget.h>
 
 void pointCloudCb(const sensor_msgs::PointCloud2ConstPtr& msg, sensor_msgs::PointCloud2Ptr& pc)
 {
@@ -241,8 +241,8 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
   pathplan::NodePtr new_node;
 
   std::vector<pathplan::ConnectionPtr> connections;
-  std::vector<int> path_order_pose_number;
-  path_order_pose_number.push_back(-10);  // n connections have n+1 nodes
+  std::vector<int> order_pose_number;
+  order_pose_number.push_back(-10);  // n connections have n+1 nodes
 
   XmlRpc::XmlRpcValue configurations;
   std::vector<int> configurations_number;
@@ -323,7 +323,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
         conn->add();
         conn->setCost(metrics->cost(last_node->getConfiguration(), approach));
         connections.push_back(conn);
-        path_order_pose_number.push_back(-10);
+        order_pose_number.push_back(-10);
         tree->addNode(new_node);
         last_node = new_node;
         /* */ ROS_DEBUG("connect with next keypoint");
@@ -370,7 +370,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
             for (size_t iconnection = 0; iconnection < tmp_connections.size(); iconnection++)
             {
               connections.push_back(tmp_connections.at(iconnection));
-              path_order_pose_number.push_back(-10);
+              order_pose_number.push_back(-10);
             }
           }
         }
@@ -459,7 +459,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
             conn->add();
             conn->setCost(metrics->cost(last_node->getConfiguration(), p.second));
             connections.push_back(conn);
-            path_order_pose_number.push_back(group_cloud_pose_number.at(ip)); // ID of the CLOUD
+            order_pose_number.push_back(group_cloud_pose_number.at(ip)); // ID of the CLOUD
             tree->addNode(new_node);
 
             last_node = new_node;
@@ -525,7 +525,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
               for (size_t iconnection = 0; iconnection < tmp_connections.size(); iconnection++)
               {
                 connections.push_back(tmp_connections.at(iconnection));
-                path_order_pose_number.push_back(group_cloud_pose_number.at(ip));
+                order_pose_number.push_back(group_cloud_pose_number.at(ip));
               }
               break;
             }
@@ -566,7 +566,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
         conn->add();
         conn->setCost(metrics->cost(last_node->getConfiguration(), approach));
         connections.push_back(conn);
-        path_order_pose_number.push_back(-10);
+        order_pose_number.push_back(-10);
         tree->addNode(new_node);
         last_node = new_node;
       }
@@ -613,7 +613,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
             for (size_t iconnection = 0; iconnection < tmp_connections.size(); iconnection++)
             {
               connections.push_back(tmp_connections.at(iconnection));
-              path_order_pose_number.push_back(-10);
+              order_pose_number.push_back(-10);
             }
           }
           else
@@ -636,24 +636,24 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
     no_feasible_ik_poses_pub.publish(no_feasible_ik_poses);
     no_ik_poses_pub.publish(no_ik_poses);
   }
-  ROS_WARN("[%s] complete the task", pnh.getNamespace().c_str());
-  ROS_WARN("[%s] order_pose_number %zu", pnh.getNamespace().c_str(), path_order_pose_number.size());
-  ROS_WARN("[%s] configurations_number %zu", pnh.getNamespace().c_str(), configurations_number.size());
+  ROS_WARN("[%s] Task Completed", pnh.getNamespace().c_str());
+  //ROS_WARN("[%s] order_pose_number %zu", pnh.getNamespace().c_str(), order_pose_number.size());
+  ROS_WARN("[%s] Number of Connected Configurations %zu", pnh.getNamespace().c_str(), configurations_number.size());
 
   if (connections.size() > 0)
   {
     pathplan::Path path(connections, metrics, checker);
     XmlRpc::XmlRpcValue xml_path_original = path.toXmlRpcValue();
-    ROS_WARN("Original || Size Cloud              : %d", xml_path_original.size());
-    ROS_WARN("Original || Size Cloud Connections  : %zu", path.getConnections().size());
-    ROS_WARN("Original || Size Ordered Pose Number: %zu", path_order_pose_number.size());
+    // ROS_WARN("Original || Size Cloud              : %d", xml_path_original.size());
+    // ROS_WARN("Original || Size Cloud Connections  : %zu", path.getConnections().size());
+    // ROS_WARN("Original || Size Ordered Pose Number: %zu", order_pose_number.size());
     if(1)
     {
       std::vector<int> map_node_from_orig_to_new;
       pathplan::PathPtr resampled_path=path.resample(max_path_step, map_node_from_orig_to_new);
-      ROS_WARN("Resampled || Size Cloud Connections         : %zu", path.getConnections().size());
-      ROS_WARN("Resampled || Size Map Node From Orig to New : %zu", map_node_from_orig_to_new.size());
-      assert(map_node_from_orig_to_new.size()==path_order_pose_number.size());
+      // ROS_WARN("Resampled || Size Cloud Connections         : %zu", path.getConnections().size());
+      // ROS_WARN("Resampled || Size Map Node From Orig to New : %zu", map_node_from_orig_to_new.size());
+      assert(map_node_from_orig_to_new.size()==order_pose_number.size());
 
       std::vector<int> resampled_order_pose_number(resampled_path->getConnections().size()+1);
       for (size_t isampled=0;isampled<resampled_order_pose_number.size();isampled++)
@@ -662,7 +662,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
         if( it != map_node_from_orig_to_new.end() )
         {
           size_t orig_idx = std::distance(map_node_from_orig_to_new.begin(), it);
-          resampled_order_pose_number.at(isampled) = path_order_pose_number.at(orig_idx);
+          resampled_order_pose_number.at(isampled) = order_pose_number.at(orig_idx);
         }
         else
         {
@@ -670,16 +670,17 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
         }
       }
       XmlRpc::XmlRpcValue xml_path = resampled_path->toXmlRpcValue();
-      ROS_WARN("Resampled || Size Cloud: %d", xml_path.size());
-      ROS_WARN("Resampled || Ordered Pose Number: %zu", resampled_order_pose_number.size());
+      // ROS_WARN("Resampled || Size Cloud: %d", xml_path.size());
+      // ROS_WARN("Resampled || Ordered Pose Number: %zu", resampled_order_pose_number.size());
       pnh.setParam("/complete/path/cloud", xml_path);
       pnh.setParam("/complete/path/cloud_pose_number", resampled_order_pose_number);
+      ROS_WARN("[%s] Number of Connected Points (including waypoints) %d", pnh.getNamespace().c_str(), xml_path.size());
     }
     else
     {    
       XmlRpc::XmlRpcValue xml_path = path.toXmlRpcValue();
       pnh.setParam("/complete/path/cloud", xml_path);
-      pnh.setParam("/complete/path/cloud_pose_number", path_order_pose_number);
+      pnh.setParam("/complete/path/cloud_pose_number", order_pose_number);
     }
     pnh.setParam("/complete/configurations", configurations);
     pnh.setParam("/complete/configurations_number", configurations_number);
