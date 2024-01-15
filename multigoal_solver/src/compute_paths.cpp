@@ -17,6 +17,7 @@
 #include <geometry_msgs/PoseArray.h>
 #include <ik_solver_msgs/GetIk.h>
 #include <ik_solver_msgs/GetIkArray.h>
+#include <ik_solver_msgs/GetFkArray.h>
 #include <ik_solver_msgs/GetBound.h>
 #include <std_srvs/Trigger.h>
 #include <moveit_msgs/GetPlanningScene.h>
@@ -99,6 +100,14 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
     online_max_joint_elongation.clear();
   }
 
+  double z_offset = 0;
+  if (!pnh.getParam("z_offset_obstacles",online_max_joint_elongation))
+  {
+    ROS_WARN("z_offset_obstacles is not set, skip trying avoinding the obstacle by moving on z");
+    z_offset=0;
+  }
+
+
 
   bool enable_approach = pnh.param("enable_approach", true);
 
@@ -126,15 +135,18 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
   std::string tool_name;
   ros::ServiceClient ik_client;
   ros::ServiceClient bound_client;
+  ros::ServiceClient fk_client;
   if (!nh.getParam("/tool_name", tool_name))
   {
     ik_client = nh.serviceClient<ik_solver_msgs::GetIkArray>("/ik_solver/get_ik_array");
     bound_client = nh.serviceClient<ik_solver_msgs::GetBound>("ik_solver/get_bounds");
+    fk_client = nh.serviceClient<ik_solver_msgs::GetFkArray>("ik_solver/get_fk_array");
   }
   else
   {
     ik_client = nh.serviceClient<ik_solver_msgs::GetIkArray>("/" + tool_name + "_ik_solver/get_ik_array");
     bound_client = nh.serviceClient<ik_solver_msgs::GetBound>("/" + tool_name + "_ik_solver/get_bounds");
+    fk_client = nh.serviceClient<ik_solver_msgs::GetFkArray>("/" + tool_name + "_ik_solver/get_fk_array");
   }
 
   if (!bound_client.waitForExistence(ros::Duration(20)))
@@ -285,6 +297,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
     for (int iax = 0; iax < q.size(); iax++)
       weight(iax, iax) = w.at(iax);
 
+    // move to the next subarea
     if (first_node)
     {
       last_q = q;
@@ -390,6 +403,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
 
     for (size_t ip = 0; ip < ik_res.solutions.size(); ip++)
     {
+      // move to the next poi
       char buffer[128]={0};  // maximum expected length of the float
       std::string nl = (ip == ik_res.solutions.size()-1 ? "\n" : "");
       std::snprintf(buffer, 128, "Pose %zu of %zu (keypoint %s)%s", ip+1, ik_res.solutions.size(), node.c_str(), nl.c_str());
@@ -412,7 +426,7 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
 
         if (checker->check(q))
         {
-          double dist = std::sqrt(q.transpose() * weight * q);
+          double dist = std::sqrt((q-last_node->getConfiguration()).transpose() * weight * (q-last_node->getConfiguration()));
           ordered_configurations.insert(std::pair<double, Eigen::VectorXd>(dist, q));
         }
       }
@@ -423,6 +437,8 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
 
         no_feasible_ik_poses.poses.push_back(ik_req.poses.poses.at(ip));
       }
+
+      // try direct connection
       if (!first_time)
       {
         for (const std::pair<double, Eigen::VectorXd>& p : ordered_configurations)
@@ -445,6 +461,186 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
           }
         }
       }
+
+      // try by adding z_offset
+      if (!connected && z_offset>0)
+      {
+        ik_solver_msgs::GetFkArrayRequest fk_req;
+        ik_solver_msgs::GetFkArrayResponse fk_res;
+
+        fk_req.reference_frame=all_poses.header.frame_id;
+        fk_req.tip_frame = tool_name;
+        fk_req.joint_names = joint_names;
+
+        last_node->getConfiguration();
+        ik_solver_msgs::Configuration configuration;
+        configuration.configuration.resize(last_q.size());
+
+        for (int iax=0;iax < last_node->getConfiguration().size();iax++)
+          configuration.configuration.push_back(last_node->getConfiguration()(iax));
+
+
+        fk_req.configurations.push_back(configuration);
+
+        if (!fk_client.call(fk_req,fk_res))
+        {
+          res.message = pnh.getNamespace() + " unable to call '" + fk_client.getService() + "'";
+          ROS_ERROR("%s", res.message.c_str());
+          res.success = false;
+          return true;
+        }
+
+        if (fk_res.poses.poses.size()!=1)
+        {
+          res.message = pnh.getNamespace() + " dimensions do not match calling '" + fk_client.getService() + "'";
+          ROS_ERROR("%s", res.message.c_str());
+          res.success = false;
+        }
+
+        ik_solver_msgs::GetIkArrayRequest offset_ik_req;
+        ik_solver_msgs::GetIkArrayResponse offset_ik_res;
+        offset_ik_req.poses.poses.resize(2);
+        offset_ik_req.poses.poses.at(0) = fk_res.poses.poses.at(0);
+        offset_ik_req.poses.poses.at(0).position.z+=z_offset;
+
+        offset_ik_req.poses.poses.at(1) = all_poses.poses.at(ip);
+        offset_ik_req.poses.poses.at(1).position.z+=z_offset;
+        offset_ik_req.poses.header.frame_id=all_poses.header.frame_id;
+
+        if (!ik_client.call(offset_ik_req, offset_ik_res))
+        {
+          res.message = pnh.getNamespace() + " unable to call '" + ik_client.getService() + "'";
+          ROS_ERROR("%s", res.message.c_str());
+          res.success = false;
+          return true;
+        }
+
+
+        Eigen::VectorXd cost_from_actual_to_approach_1(offset_ik_res.solutions.at(0).configurations.size());
+        Eigen::MatrixXd cost_from_approach_1_to_approach_2(offset_ik_res.solutions.at(0).configurations.size(),
+                                                           offset_ik_res.solutions.at(1).configurations.size());
+        Eigen::MatrixXd cost_from_approach_2_to_destination(offset_ik_res.solutions.at(1).configurations.size(),
+                                                            ordered_configurations.size());
+
+
+        for (size_t itmp=0;itmp<offset_ik_res.solutions.at(0).configurations.size();itmp++)
+        {
+          ik_solver_msgs::Configuration& c = offset_ik_res.solutions.at(0).configurations.at(itmp);
+          q = Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(c.configuration.data(), c.configuration.size());
+          if (checker->checkPath(last_node->getConfiguration(),q))
+          {
+            double dist = std::sqrt((q-last_node->getConfiguration()).transpose() * weight * (q-last_node->getConfiguration()));
+            cost_from_actual_to_approach_1(itmp)=dist;
+          }
+          else
+            cost_from_actual_to_approach_1(itmp)=std::numeric_limits<double>::infinity();
+        }
+
+        for (size_t itmp1=0;itmp1<offset_ik_res.solutions.at(0).configurations.size();itmp1++)
+        {
+          for (size_t itmp2=0;itmp2<offset_ik_res.solutions.at(1).configurations.size();itmp2++)
+          {
+            ik_solver_msgs::Configuration& c1 = offset_ik_res.solutions.at(0).configurations.at(itmp1);
+            Eigen::VectorXd q1 = Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(c1.configuration.data(), c1.configuration.size());
+            ik_solver_msgs::Configuration& c2 = offset_ik_res.solutions.at(1).configurations.at(itmp2);
+            Eigen::VectorXd q2 = Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(c2.configuration.data(), c2.configuration.size());
+            if (checker->checkPath(last_q,q))
+            {
+              double dist = std::sqrt((q2-q1).transpose() * weight * (q2-q1));
+              cost_from_approach_1_to_approach_2(itmp1,itmp2)=dist;
+            }
+            else
+              cost_from_approach_1_to_approach_2(itmp1,itmp2)=std::numeric_limits<double>::infinity();
+          }
+        }
+
+        for (size_t itmp1=0;itmp1<offset_ik_res.solutions.at(1).configurations.size();itmp1++)
+        {
+          size_t itmp2=0;
+          for (const std::pair<double, Eigen::VectorXd>& p : ordered_configurations)
+          {
+            ik_solver_msgs::Configuration& c1 = offset_ik_res.solutions.at(1).configurations.at(itmp1);
+            Eigen::VectorXd q1 = Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(c1.configuration.data(), c1.configuration.size());
+
+            Eigen::VectorXd q2 = p.second;
+            if (checker->checkPath(last_q,q))
+            {
+              double dist = std::sqrt((q2-q1).transpose() * weight * (q2-q1));
+              cost_from_approach_2_to_destination(itmp1,itmp2)=dist;
+            }
+            else
+              cost_from_approach_2_to_destination(itmp1,itmp2)=std::numeric_limits<double>::infinity();
+
+            itmp2++;
+          }
+        }
+
+        double offset_cost=std::numeric_limits<double>::infinity();
+        double offset_idx_1, offset_idx_2, offset_idx_3;
+
+        for (size_t itmp1=0;itmp1<offset_ik_res.solutions.at(0).configurations.size();itmp1++)
+        {
+          for (size_t itmp2=0;itmp2<offset_ik_res.solutions.at(1).configurations.size();itmp2++)
+          {
+            for (size_t itmp3=0;itmp3<ordered_configurations.size();itmp3++)
+            {
+               double tmp_cost=cost_from_actual_to_approach_1(itmp1)+
+                   cost_from_approach_1_to_approach_2(itmp1,itmp2)+
+                   cost_from_approach_2_to_destination(itmp2,itmp3);
+
+               if (tmp_cost<offset_cost)
+               {
+                 offset_cost=tmp_cost;
+                 offset_idx_1=itmp1;
+                 offset_idx_2=itmp2;
+                 offset_idx_3=itmp3;
+               }
+            }
+          }
+        }
+
+        if (offset_cost<std::numeric_limits<double>::infinity())
+        {
+
+          Eigen::VectorXd q1;
+          Eigen::VectorXd q2;
+          Eigen::VectorXd q3;
+
+          pathplan::NodePtr n1 = std::make_shared<pathplan::Node>(q1);
+          pathplan::NodePtr n2 = std::make_shared<pathplan::Node>(q2);
+          pathplan::NodePtr n3 = std::make_shared<pathplan::Node>(q3);
+
+
+          pathplan::ConnectionPtr conn12 = std::make_shared<pathplan::Connection>(last_node, n1);
+          conn12->add();
+          conn12->setCost(metrics->cost(last_node->getConfiguration(), q1));
+
+          pathplan::ConnectionPtr conn23 = std::make_shared<pathplan::Connection>(n1, n2);
+          conn23->add();
+          conn23->setCost(metrics->cost(q1, q2));
+
+          pathplan::ConnectionPtr conn34 = std::make_shared<pathplan::Connection>(n2, n3);
+          conn34->add();
+          conn34->setCost(metrics->cost(q2, q3));
+
+          connections.push_back(conn12);
+          order_pose_number.push_back(pose_number.at(ip));
+          connections.push_back(conn23);
+          order_pose_number.push_back(pose_number.at(ip));
+          connections.push_back(conn34);
+          order_pose_number.push_back(pose_number.at(ip));
+
+          last_q = q3;
+          connected = true;
+          tree->addNode(n1);
+          tree->addNode(n2);
+          tree->addNode(n3);
+
+          last_node = n3;
+        }
+      }
+
+      // try with RRT connect
       if (!connected)
       {
         ROS_DEBUG("Pose %zu of %zu (keypoint %s): Try connect", ip, ik_res.solutions.size(), node.c_str());
