@@ -611,23 +611,23 @@ bool pathCb(std_srvs::TriggerRequest& req, std_srvs::TriggerResponse& res)
           pathplan::NodePtr n3 = std::make_shared<pathplan::Node>(q3);
 
 
-          pathplan::ConnectionPtr conn12 = std::make_shared<pathplan::Connection>(last_node, n1);
+          pathplan::ConnectionPtr conn01 = std::make_shared<pathplan::Connection>(last_node, n1);
+          conn01->add();
+          conn01->setCost(metrics->cost(last_node->getConfiguration(), q1));
+
+          pathplan::ConnectionPtr conn12 = std::make_shared<pathplan::Connection>(n1, n2);
           conn12->add();
-          conn12->setCost(metrics->cost(last_node->getConfiguration(), q1));
+          conn12->setCost(metrics->cost(q1, q2));
 
-          pathplan::ConnectionPtr conn23 = std::make_shared<pathplan::Connection>(n1, n2);
+          pathplan::ConnectionPtr conn23 = std::make_shared<pathplan::Connection>(n2, n3);
           conn23->add();
-          conn23->setCost(metrics->cost(q1, q2));
+          conn23->setCost(metrics->cost(q2, q3));
 
-          pathplan::ConnectionPtr conn34 = std::make_shared<pathplan::Connection>(n2, n3);
-          conn34->add();
-          conn34->setCost(metrics->cost(q2, q3));
-
+          connections.push_back(conn01);
+          order_pose_number.push_back(pose_number.at(ip));
           connections.push_back(conn12);
           order_pose_number.push_back(pose_number.at(ip));
           connections.push_back(conn23);
-          order_pose_number.push_back(pose_number.at(ip));
-          connections.push_back(conn34);
           order_pose_number.push_back(pose_number.at(ip));
 
           last_q = q3;
