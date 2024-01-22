@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 
 <launch>
-  <arg name="optim_params_config_file" /> <!-- default="$(find multigoal_solver)/config/test.yaml" / -->
-  <arg name="compute_tree_params" /> <!-- default="$(find multigoal_solver)/config/test.yaml" / -->
+  <arg name="optim_params_config_file" default="$(find multigoal_solver)/config/test.yaml" />
+  <arg name="compute_tree_params" default="$(find multigoal_solver)/config/test.yaml" />
   <arg name="output_stream" default="log" />
 
   <arg name="debug" default="false" />
